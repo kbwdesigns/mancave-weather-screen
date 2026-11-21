@@ -21,6 +21,9 @@ Built for the **Waveshare ESP32-S3-Touch-LCD-7 Rev 1.2** (ESP32-S3N16R8, 800×48
 - Sunrise, sunset, and solar noon times come from Home Assistant's `sun.sun` entity, so they follow the elevation set in HA
 
 Temperatures are in °F, wind is in mph, and rain is in inches, as written in this config.
+## Screens
+![Main page](photos/main_5day.jpg)
+![Sun page](photos/sun_page.jpg)
 
 ## Hardware
 
