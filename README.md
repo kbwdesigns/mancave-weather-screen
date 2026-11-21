@@ -22,16 +22,21 @@ Built for the **Waveshare ESP32-S3-Touch-LCD-7 Rev 1.2** (ESP32-S3N16R8, 800×48
 
 Temperatures are in °F, wind is in mph, and rain is in inches, as written in this config.
 ## Screens
-![Main page](photos/main_5day.JPG)
 Main page with next 5 days forecast
-![Main page](photos/main_next4hrs.JPG)
+![Main page](photos/main_5day.JPG)
+
 Main page with next 4 hours forecast
-![Main page](photos/main_sun_moon.JPG)
+![Main page](photos/main_next4hrs.JPG)
+
 Main page with Sun and Moon
-![Sun page](photos/sun_page.JPG)
+![Main page](photos/main_sun_moon.JPG)
+
 Sun page
-![Wind page](photos/wind_page.JPG)
+![Sun page](photos/sun_page.JPG)
+
 Wind page with next 4 hours
+![Wind page](photos/wind_page.JPG)
+
 
 ## Hardware
 
