@@ -1,0 +1,3898 @@
+# ESP32-S3-Touch-LCD-7
+# 16MB flash layout (already installed over USB with v6); Wi-Fi OTA is fine from here on
+substitutions:
+  # Your location for the Sun page sun-path math (decimal degrees, west longitude negative)
+  latitude: "0.0"
+  longitude: "0.0"
+  tempscale: "°F"
+  humidityscale: "%"
+
+  # Indoor
+  ha_indoor_temp: sensor.mancave_ble_temperature
+  ha_indoor_humidity: sensor.mancave_ble_humidity
+
+  # Outdoor / deck
+  ha_deck_temp: sensor.deck_temperature_temperature
+  ha_deck_humidity: sensor.deck_temperature_humidity
+
+  # Ecowitt rain / pressure
+  ha_event_rain: sensor.gw1100b_event_rain
+  ha_rain_rate: sensor.gw1100b_rain_rate
+  ha_pressure: sensor.gw1100b_relative_pressure
+
+  # Current weather
+  ha_wind_speed: sensor.current_wind_speed
+  ha_wind_direction: sensor.current_wind_direction
+  ha_condition: sensor.openweathermap_condition
+
+  # 5-day forecast
+  ha_forecast_day_0_low: sensor.forecast_day_0_low
+  ha_forecast_day_0_high: sensor.forecast_day_0_high
+  ha_forecast_day_0_condition: sensor.forecast_day_0_condition
+  ha_forecast_day_1_low: sensor.forecast_day_1_low
+  ha_forecast_day_1_high: sensor.forecast_day_1_high
+  ha_forecast_day_1_condition: sensor.forecast_day_1_condition
+  ha_forecast_day_2_low: sensor.forecast_day_2_low
+  ha_forecast_day_2_high: sensor.forecast_day_2_high
+  ha_forecast_day_2_condition: sensor.forecast_day_2_condition
+  ha_forecast_day_3_low: sensor.forecast_day_3_low
+  ha_forecast_day_3_high: sensor.forecast_day_3_high
+  ha_forecast_day_3_condition: sensor.forecast_day_3_condition
+  ha_forecast_day_4_low: sensor.forecast_day_4_low
+  ha_forecast_day_4_high: sensor.forecast_day_4_high
+  ha_forecast_day_4_condition: sensor.forecast_day_4_condition
+
+  # Hourly wind
+  ha_forecast_hour_0_wind_speed: sensor.forecast_hour_0_wind_speed
+  ha_forecast_hour_0_wind_direction: sensor.forecast_hour_0_wind_direction
+  ha_forecast_hour_1_wind_speed: sensor.forecast_hour_1_wind_speed
+  ha_forecast_hour_1_wind_direction: sensor.forecast_hour_1_wind_direction
+  ha_forecast_hour_2_wind_speed: sensor.forecast_hour_2_wind_speed
+  ha_forecast_hour_2_wind_direction: sensor.forecast_hour_2_wind_direction
+  ha_forecast_hour_3_wind_speed: sensor.forecast_hour_3_wind_speed
+  ha_forecast_hour_3_wind_direction: sensor.forecast_hour_3_wind_direction
+
+  # Sun and moon
+  ha_sun: sun.sun
+  ha_moon: sensor.moon
+
+  # Template sensors
+  ha_daily_precip: sensor.mancave_daily_precip
+  ha_hourly_4h: sensor.mancave_hourly_4h
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
+      CONFIG_ESP32S3_DATA_CACHE_64KB: y
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
+      CONFIG_SPIRAM_RODATA: y
+      CONFIG_ESPTOOLPY_FLASHSIZE_16MB: y
+
+esphome:
+  name: mancave-screen
+  on_boot:
+    # Boot splash: KBW Designs logo for 5s, then the main page.
+    # (page_splash is the first LVGL page, so it is what shows at power-up.)
+    - priority: -100
+      then:
+        - lvgl.page.show: page_splash
+        - delay: 5s
+        - lvgl.page.show: page_main
+  build_flags:
+    - "-DBOARD_HAS_PSRAM"
+  platformio_options:
+    build_unflags: -Werror=all
+    board_build.flash_mode: dio
+    board_build.esp-idf.memory_type: qio_opi
+    board_upload.maximum_ram_size: 524288
+    board_build.flash_size: 16MB
+
+api:
+  encryption:
+    key: !secret mancave_weather_api_key
+
+ota:
+  - platform: esphome
+    password: !secret mancave_weather_ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+captive_portal:
+
+logger:
+  level: DEBUG
+  hardware_uart: UART0
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+ch422g:
+  - id: io_ex
+
+i2c:
+  sda: 8
+  scl: 9
+  frequency: 400kHz
+  scan: true
+  id: bus_a
+
+touchscreen:
+  platform: gt911
+  address: 0x5D
+  id: my_touchscreen
+  update_interval: 16ms
+  interrupt_pin: 4
+  reset_pin:
+    ch422g: io_ex
+    number: 1
+
+display:
+  - platform: mipi_rgb
+    model: ESP32-S3-TOUCH-LCD-7-800X480
+    id: device_display
+    update_interval: never
+    auto_clear_enabled: false
+    color_order: RGB
+    pclk_frequency: 16MHz
+    dimensions:
+      width: 800
+      height: 480
+    reset_pin:
+      ch422g: io_ex
+      number: 3
+    enable_pin:
+      ch422g: io_ex
+      number: 6
+    de_pin:
+      number: 5
+    hsync_pin:
+      number: 46
+      ignore_strapping_warning: true
+    vsync_pin:
+      number: 3
+      ignore_strapping_warning: true
+    pclk_pin: 7
+    pclk_inverted: true
+    hsync_back_porch: 8
+    hsync_front_porch: 8
+    hsync_pulse_width: 4
+    vsync_back_porch: 16
+    vsync_front_porch: 16
+    vsync_pulse_width: 4
+    data_pins:
+      red: [1, 2, 42, 41, 40]
+      blue: [14, 38, 18, 17, 10]
+      green: [39, 0, 45, 48, 47, 21]
+
+output:
+  - platform: ledc
+    pin: GPIO06
+    id: backlight_pwm
+    frequency: 2000Hz
+    channel: 0
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "Screen Backlight"
+    id: backlight
+    restore_mode: ALWAYS_ON
+
+time:
+  - platform: homeassistant
+    id: ha_time
+    on_time:
+      - seconds: 0
+        then:
+          - lvgl.label.update:
+              id: lbl_time
+              text: !lambda |-
+                auto t = id(ha_time).now();
+                char buf[8];
+                int hour = t.hour > 12 ? t.hour - 12 : (t.hour == 0 ? 12 : t.hour);
+                snprintf(buf, sizeof(buf), "%d:%02d", hour, t.minute);
+                return std::string(buf);
+
+          - lvgl.label.update:
+              id: lbl_ampm
+              text: !lambda |-
+                return id(ha_time).now().strftime("%p");
+
+          - lvgl.label.update:
+              id: lbl_date
+              text: !lambda |-
+                auto t = id(ha_time).now();
+                char buf[32];
+                const char* days[] = {"Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"};
+                const char* months[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+                snprintf(buf, sizeof(buf), "%s  %d %s", days[t.day_of_week - 1], t.day_of_month, months[t.month - 1]);
+                return std::string(buf);
+
+          - lvgl.label.update:
+              id: hourly_header_time
+              text: !lambda |-
+                auto t = id(ha_time).now();
+                char buf[12];
+                int hour = t.hour > 12 ? t.hour - 12 : (t.hour == 0 ? 12 : t.hour);
+                snprintf(buf, sizeof(buf), "%d:%02d %s", hour, t.minute, t.hour >= 12 ? "PM" : "AM");
+                return std::string(buf);
+
+          - lvgl.label.update:
+              id: sun_header_time
+              text: !lambda |-
+                auto t = id(ha_time).now();
+                char buf[12];
+                int hour = t.hour > 12 ? t.hour - 12 : (t.hour == 0 ? 12 : t.hour);
+                snprintf(buf, sizeof(buf), "%d:%02d %s", hour, t.minute, t.hour >= 12 ? "PM" : "AM");
+                return std::string(buf);
+
+          - script.execute: align_sun_deck
+          - script.execute: update_sun_panel
+          - script.execute: update_sun_page
+
+# Pressure trend: keep ~3 hours of samples and compare newest vs oldest
+globals:
+  - id: weather_cond
+    type: std::string
+    restore_value: false
+    initial_value: '"cloudy"'
+  - id: pressure_history
+    type: std::vector<float>
+    restore_value: false
+  - id: pressure_trend
+    type: int          # -1 falling, 0 steady, 1 rising
+    restore_value: false
+    initial_value: "0"
+  - id: fc_panel
+    type: int          # main forecast box: 0 5-day, 1 hourly, 2 sun & moon
+    restore_value: false
+    initial_value: "0"
+  # exact sunrise / sunset epoch seconds for the Sun page countdown (set by update_sun_page)
+  - id: sun_cd_rise
+    type: double
+    restore_value: false
+    initial_value: "0"
+  - id: sun_cd_set
+    type: double
+    restore_value: false
+    initial_value: "0"
+  - id: sun_cd_rise_next
+    type: double
+    restore_value: false
+    initial_value: "0"
+  # seconds to add to the computed sea-level sunrise / sunset / noon so every time on
+  # screen matches Home Assistant's sun.sun (which includes HA's elevation setting).
+  # Set by update_sun_panel; stay 0 (plain computed times) until HA's values arrive.
+  - id: sun_off_rise
+    type: double
+    restore_value: false
+    initial_value: "0"
+  - id: sun_off_set
+    type: double
+    restore_value: false
+    initial_value: "0"
+  - id: sun_off_noon
+    type: double
+    restore_value: false
+    initial_value: "0"
+
+interval:
+  # Sun page countdown: only does anything while the Sun page is on screen
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            lambda: 'return id(page_sun)->is_showing();'
+          then:
+            - script.execute: update_sun_countdown
+
+  # Rotate the main-page forecast box every 15 seconds
+  - interval: 15s
+    then:
+      - lambda: 'id(fc_panel) = (id(fc_panel) + 1) % 3;'
+      - script.execute: show_fc_panel
+
+  - interval: 15min
+    then:
+      - lambda: |-
+          if (isnan(id(ha_pressure).state)) return;
+          float inhg = id(ha_pressure).state * 0.0295299830714;
+          auto &h = id(pressure_history);
+          h.push_back(inhg);
+          if (h.size() > 13) h.erase(h.begin());   // 13 samples x 15 min = 3 hours
+          int trend = 0;
+          if (h.size() >= 2) {
+            float change = h.back() - h.front();
+            if (change > 0.03) trend = 1;          // ~1 hPa
+            else if (change < -0.03) trend = -1;
+          }
+          id(pressure_trend) = trend;
+      - lvgl.label.update:
+          id: equivalent_pressure_arrow
+          text: !lambda |-
+            if (id(pressure_trend) > 0) return "\U000F005C";
+            if (id(pressure_trend) < 0) return "\U000F0043";
+            return "\U000F0054";
+          text_color: !lambda |-
+            if (id(pressure_trend) > 0) return lv_color_hex(0x66BB6A);
+            if (id(pressure_trend) < 0) return lv_color_hex(0xEF5350);
+            return lv_color_hex(0xFFFFFF);
+
+script:
+  - id: update_forecast_rows
+    then:
+      # ========== Day 0 ==========
+      - lvgl.label.update:
+          id: main_day0_name
+          text: "Today"
+      - lvgl.label.update:
+          id: main_day0_icon
+          text: !lambda |-
+            std::string c = id(fc0_cond).state;
+            for (char &ch : c) ch = tolower(ch);
+            if (c.find("fog") != std::string::npos || c.find("mist") != std::string::npos) return "\uF014";
+            if (c.find("sunny") != std::string::npos || c.find("clear") != std::string::npos) return "\uF00D";
+            if (c.find("partly") != std::string::npos) return "\uF002";
+            if (c.find("cloud") != std::string::npos || c.find("overcast") != std::string::npos) return "\uF013";
+            if (c.find("rain") != std::string::npos || c.find("pour") != std::string::npos || c.find("shower") != std::string::npos) return "\uF019";
+            if (c.find("thunder") != std::string::npos || c.find("lightning") != std::string::npos || c.find("storm") != std::string::npos) return "\uF01E";
+            if (c.find("snow") != std::string::npos) return "\uF01B";
+            return "\uF013";
+          text_color: !lambda |-
+            std::string c = id(fc0_cond).state;
+            for (char &ch : c) ch = tolower(ch);
+            if (c.find("sunny") != std::string::npos || c.find("clear") != std::string::npos) return lv_color_hex(0xFFCC00);
+            if (c.find("partly") != std::string::npos) return lv_color_hex(0xFFCC00);
+            if (c.find("cloud") != std::string::npos || c.find("overcast") != std::string::npos) return lv_color_hex(0xAAAAAA);
+            if (c.find("rain") != std::string::npos || c.find("pour") != std::string::npos || c.find("shower") != std::string::npos) return lv_color_hex(0x4FC3F7);
+            if (c.find("thunder") != std::string::npos || c.find("lightning") != std::string::npos || c.find("storm") != std::string::npos) return lv_color_hex(0x7E57C2);
+            if (c.find("snow") != std::string::npos) return lv_color_hex(0xE0E0E0);
+            if (c.find("fog") != std::string::npos || c.find("mist") != std::string::npos) return lv_color_hex(0x90A4AE);
+            return lv_color_hex(0xAAAAAA);
+      - lvgl.label.update:
+          id: main_day0_low
+          text: !lambda 'return std::to_string((int)id(fc0_low).state) + "°";'
+      - lvgl.label.update:
+          id: main_day0_high
+          text: !lambda 'return std::to_string((int)id(fc0_high).state) + "°";'
+      - lvgl.bar.update:
+          id: main_day0_bar
+          value: !lambda 'return (int)id(fc0_high).state;'
+      - lvgl.widget.update:
+          id: main_day0_bar
+          indicator:
+            bg_color: !lambda |-
+              int t = (int)id(fc0_high).state;
+              if (t <= 40) return lv_color_hex(0x1565C0);
+              if (t <= 55) return lv_color_hex(0x4FC3F7);
+              if (t <= 70) return lv_color_hex(0x66BB6A);
+              if (t <= 85) return lv_color_hex(0xFFAA00);
+              return lv_color_hex(0xEF5350);
+            bg_grad_dir: NONE
+
+      # ========== Day 1 ==========
+      - lvgl.label.update:
+          id: main_day1_name
+          text: !lambda |-
+            static const char* days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+            int d = id(ha_time).now().day_of_week;
+            return days[d % 7];
+      - lvgl.label.update:
+          id: main_day1_icon
+          text: !lambda |-
+            std::string c = id(fc1_cond).state;
+            for (char &ch : c) ch = tolower(ch);
+            if (c.find("fog") != std::string::npos || c.find("mist") != std::string::npos) return "\uF014";
+            if (c.find("sunny") != std::string::npos || c.find("clear") != std::string::npos) return "\uF00D";
+            if (c.find("partly") != std::string::npos) return "\uF002";
+            if (c.find("cloud") != std::string::npos || c.find("overcast") != std::string::npos) return "\uF013";
+            if (c.find("rain") != std::string::npos || c.find("pour") != std::string::npos || c.find("shower") != std::string::npos) return "\uF019";
+            if (c.find("thunder") != std::string::npos || c.find("lightning") != std::string::npos || c.find("storm") != std::string::npos) return "\uF01E";
+            if (c.find("snow") != std::string::npos) return "\uF01B";
+            return "\uF013";
+          text_color: !lambda |-
+            std::string c = id(fc1_cond).state;
+            for (char &ch : c) ch = tolower(ch);
+            if (c.find("sunny") != std::string::npos || c.find("clear") != std::string::npos) return lv_color_hex(0xFFCC00);
+            if (c.find("partly") != std::string::npos) return lv_color_hex(0xFFCC00);
+            if (c.find("cloud") != std::string::npos || c.find("overcast") != std::string::npos) return lv_color_hex(0xAAAAAA);
+            if (c.find("rain") != std::string::npos || c.find("pour") != std::string::npos || c.find("shower") != std::string::npos) return lv_color_hex(0x4FC3F7);
+            if (c.find("thunder") != std::string::npos || c.find("lightning") != std::string::npos || c.find("storm") != std::string::npos) return lv_color_hex(0x7E57C2);
+            if (c.find("snow") != std::string::npos) return lv_color_hex(0xE0E0E0);
+            if (c.find("fog") != std::string::npos || c.find("mist") != std::string::npos) return lv_color_hex(0x90A4AE);
+            return lv_color_hex(0xAAAAAA);
+      - lvgl.label.update:
+          id: main_day1_low
+          text: !lambda 'return std::to_string((int)id(fc1_low).state) + "°";'
+      - lvgl.label.update:
+          id: main_day1_high
+          text: !lambda 'return std::to_string((int)id(fc1_high).state) + "°";'
+      - lvgl.bar.update:
+          id: main_day1_bar
+          value: !lambda 'return (int)id(fc1_high).state;'
+      - lvgl.widget.update:
+          id: main_day1_bar
+          indicator:
+            bg_color: !lambda |-
+              int t = (int)id(fc1_high).state;
+              if (t <= 40) return lv_color_hex(0x1565C0);
+              if (t <= 55) return lv_color_hex(0x4FC3F7);
+              if (t <= 70) return lv_color_hex(0x66BB6A);
+              if (t <= 85) return lv_color_hex(0xFFAA00);
+              return lv_color_hex(0xEF5350);
+            bg_grad_dir: NONE
+
+      # ========== Day 2 ==========
+      - lvgl.label.update:
+          id: main_day2_name
+          text: !lambda |-
+            static const char* days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+            int d = id(ha_time).now().day_of_week;
+            return days[(d + 1) % 7];
+      - lvgl.label.update:
+          id: main_day2_icon
+          text: !lambda |-
+            std::string c = id(fc2_cond).state;
+            for (char &ch : c) ch = tolower(ch);
+            if (c.find("fog") != std::string::npos || c.find("mist") != std::string::npos) return "\uF014";
+            if (c.find("sunny") != std::string::npos || c.find("clear") != std::string::npos) return "\uF00D";
+            if (c.find("partly") != std::string::npos) return "\uF002";
+            if (c.find("cloud") != std::string::npos || c.find("overcast") != std::string::npos) return "\uF013";
+            if (c.find("rain") != std::string::npos || c.find("pour") != std::string::npos || c.find("shower") != std::string::npos) return "\uF019";
+            if (c.find("thunder") != std::string::npos || c.find("lightning") != std::string::npos || c.find("storm") != std::string::npos) return "\uF01E";
+            if (c.find("snow") != std::string::npos) return "\uF01B";
+            return "\uF013";
+          text_color: !lambda |-
+            std::string c = id(fc2_cond).state;
+            for (char &ch : c) ch = tolower(ch);
+            if (c.find("sunny") != std::string::npos || c.find("clear") != std::string::npos) return lv_color_hex(0xFFCC00);
+            if (c.find("partly") != std::string::npos) return lv_color_hex(0xFFCC00);
+            if (c.find("cloud") != std::string::npos || c.find("overcast") != std::string::npos) return lv_color_hex(0xAAAAAA);
+            if (c.find("rain") != std::string::npos || c.find("pour") != std::string::npos || c.find("shower") != std::string::npos) return lv_color_hex(0x4FC3F7);
+            if (c.find("thunder") != std::string::npos || c.find("lightning") != std::string::npos || c.find("storm") != std::string::npos) return lv_color_hex(0x7E57C2);
+            if (c.find("snow") != std::string::npos) return lv_color_hex(0xE0E0E0);
+            if (c.find("fog") != std::string::npos || c.find("mist") != std::string::npos) return lv_color_hex(0x90A4AE);
+            return lv_color_hex(0xAAAAAA);
+      - lvgl.label.update:
+          id: main_day2_low
+          text: !lambda 'return std::to_string((int)id(fc2_low).state) + "°";'
+      - lvgl.label.update:
+          id: main_day2_high
+          text: !lambda 'return std::to_string((int)id(fc2_high).state) + "°";'
+      - lvgl.bar.update:
+          id: main_day2_bar
+          value: !lambda 'return (int)id(fc2_high).state;'
+      - lvgl.widget.update:
+          id: main_day2_bar
+          indicator:
+            bg_color: !lambda |-
+              int t = (int)id(fc2_high).state;
+              if (t <= 40) return lv_color_hex(0x1565C0);
+              if (t <= 55) return lv_color_hex(0x4FC3F7);
+              if (t <= 70) return lv_color_hex(0x66BB6A);
+              if (t <= 85) return lv_color_hex(0xFFAA00);
+              return lv_color_hex(0xEF5350);
+            bg_grad_dir: NONE
+
+      # ========== Day 3 ==========
+      - lvgl.label.update:
+          id: main_day3_name
+          text: !lambda |-
+            static const char* days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+            int d = id(ha_time).now().day_of_week;
+            return days[(d + 2) % 7];
+      - lvgl.label.update:
+          id: main_day3_icon
+          text: !lambda |-
+            std::string c = id(fc3_cond).state;
+            for (char &ch : c) ch = tolower(ch);
+            if (c.find("fog") != std::string::npos || c.find("mist") != std::string::npos) return "\uF014";
+            if (c.find("sunny") != std::string::npos || c.find("clear") != std::string::npos) return "\uF00D";
+            if (c.find("partly") != std::string::npos) return "\uF002";
+            if (c.find("cloud") != std::string::npos || c.find("overcast") != std::string::npos) return "\uF013";
+            if (c.find("rain") != std::string::npos || c.find("pour") != std::string::npos || c.find("shower") != std::string::npos) return "\uF019";
+            if (c.find("thunder") != std::string::npos || c.find("lightning") != std::string::npos || c.find("storm") != std::string::npos) return "\uF01E";
+            if (c.find("snow") != std::string::npos) return "\uF01B";
+            return "\uF013";
+          text_color: !lambda |-
+            std::string c = id(fc3_cond).state;
+            for (char &ch : c) ch = tolower(ch);
+            if (c.find("sunny") != std::string::npos || c.find("clear") != std::string::npos) return lv_color_hex(0xFFCC00);
+            if (c.find("partly") != std::string::npos) return lv_color_hex(0xFFCC00);
+            if (c.find("cloud") != std::string::npos || c.find("overcast") != std::string::npos) return lv_color_hex(0xAAAAAA);
+            if (c.find("rain") != std::string::npos || c.find("pour") != std::string::npos || c.find("shower") != std::string::npos) return lv_color_hex(0x4FC3F7);
+            if (c.find("thunder") != std::string::npos || c.find("lightning") != std::string::npos || c.find("storm") != std::string::npos) return lv_color_hex(0x7E57C2);
+            if (c.find("snow") != std::string::npos) return lv_color_hex(0xE0E0E0);
+            if (c.find("fog") != std::string::npos || c.find("mist") != std::string::npos) return lv_color_hex(0x90A4AE);
+            return lv_color_hex(0xAAAAAA);
+      - lvgl.label.update:
+          id: main_day3_low
+          text: !lambda 'return std::to_string((int)id(fc3_low).state) + "°";'
+      - lvgl.label.update:
+          id: main_day3_high
+          text: !lambda 'return std::to_string((int)id(fc3_high).state) + "°";'
+      - lvgl.bar.update:
+          id: main_day3_bar
+          value: !lambda 'return (int)id(fc3_high).state;'
+      - lvgl.widget.update:
+          id: main_day3_bar
+          indicator:
+            bg_color: !lambda |-
+              int t = (int)id(fc3_high).state;
+              if (t <= 40) return lv_color_hex(0x1565C0);
+              if (t <= 55) return lv_color_hex(0x4FC3F7);
+              if (t <= 70) return lv_color_hex(0x66BB6A);
+              if (t <= 85) return lv_color_hex(0xFFAA00);
+              return lv_color_hex(0xEF5350);
+            bg_grad_dir: NONE
+
+      # ========== Day 4 ==========
+      - lvgl.label.update:
+          id: main_day4_name
+          text: !lambda |-
+            static const char* days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+            int d = id(ha_time).now().day_of_week;
+            return days[(d + 3) % 7];
+      - lvgl.label.update:
+          id: main_day4_icon
+          text: !lambda |-
+            std::string c = id(fc4_cond).state;
+            for (char &ch : c) ch = tolower(ch);
+            if (c.find("fog") != std::string::npos || c.find("mist") != std::string::npos) return "\uF014";
+            if (c.find("sunny") != std::string::npos || c.find("clear") != std::string::npos) return "\uF00D";
+            if (c.find("partly") != std::string::npos) return "\uF002";
+            if (c.find("cloud") != std::string::npos || c.find("overcast") != std::string::npos) return "\uF013";
+            if (c.find("rain") != std::string::npos || c.find("pour") != std::string::npos || c.find("shower") != std::string::npos) return "\uF019";
+            if (c.find("thunder") != std::string::npos || c.find("lightning") != std::string::npos || c.find("storm") != std::string::npos) return "\uF01E";
+            if (c.find("snow") != std::string::npos) return "\uF01B";
+            return "\uF013";
+          text_color: !lambda |-
+            std::string c = id(fc4_cond).state;
+            for (char &ch : c) ch = tolower(ch);
+            if (c.find("sunny") != std::string::npos || c.find("clear") != std::string::npos) return lv_color_hex(0xFFCC00);
+            if (c.find("partly") != std::string::npos) return lv_color_hex(0xFFCC00);
+            if (c.find("cloud") != std::string::npos || c.find("overcast") != std::string::npos) return lv_color_hex(0xAAAAAA);
+            if (c.find("rain") != std::string::npos || c.find("pour") != std::string::npos || c.find("shower") != std::string::npos) return lv_color_hex(0x4FC3F7);
+            if (c.find("thunder") != std::string::npos || c.find("lightning") != std::string::npos || c.find("storm") != std::string::npos) return lv_color_hex(0x7E57C2);
+            if (c.find("snow") != std::string::npos) return lv_color_hex(0xE0E0E0);
+            if (c.find("fog") != std::string::npos || c.find("mist") != std::string::npos) return lv_color_hex(0x90A4AE);
+            return lv_color_hex(0xAAAAAA);
+      - lvgl.label.update:
+          id: main_day4_low
+          text: !lambda 'return std::to_string((int)id(fc4_low).state) + "°";'
+      - lvgl.label.update:
+          id: main_day4_high
+          text: !lambda 'return std::to_string((int)id(fc4_high).state) + "°";'
+      - lvgl.bar.update:
+          id: main_day4_bar
+          value: !lambda 'return (int)id(fc4_high).state;'
+      - lvgl.widget.update:
+          id: main_day4_bar
+          indicator:
+            bg_color: !lambda |-
+              int t = (int)id(fc4_high).state;
+              if (t <= 40) return lv_color_hex(0x1565C0);
+              if (t <= 55) return lv_color_hex(0x4FC3F7);
+              if (t <= 70) return lv_color_hex(0x66BB6A);
+              if (t <= 85) return lv_color_hex(0xFFAA00);
+              return lv_color_hex(0xEF5350);
+            bg_grad_dir: NONE
+      # Range bars: each bar spans that day's low..high on a shared weekly scale
+      - lambda: |-
+          float lo[5] = {id(fc0_low).state, id(fc1_low).state, id(fc2_low).state, id(fc3_low).state, id(fc4_low).state};
+          float hi[5] = {id(fc0_high).state, id(fc1_high).state, id(fc2_high).state, id(fc3_high).state, id(fc4_high).state};
+          lv_obj_t *bars[5] = {id(main_day0_bar), id(main_day1_bar), id(main_day2_bar), id(main_day3_bar), id(main_day4_bar)};
+          int wmin = 999, wmax = -999;
+          for (int i = 0; i < 5; i++) {
+            if (std::isnan(lo[i]) || std::isnan(hi[i])) continue;
+            wmin = std::min(wmin, (int) lroundf(lo[i]));
+            wmax = std::max(wmax, (int) lroundf(hi[i]));
+          }
+          if (wmin > wmax) return;           // no valid data yet
+          if (wmax - wmin < 10) wmax = wmin + 10;  // avoid a too-zoomed scale
+          for (int i = 0; i < 5; i++) {
+            lv_obj_t *b = bars[i];
+            lv_bar_set_mode(b, LV_BAR_MODE_RANGE);
+            lv_bar_set_range(b, wmin, wmax);
+            if (std::isnan(lo[i]) || std::isnan(hi[i])) {
+              lv_bar_set_start_value(b, wmin, LV_ANIM_OFF);
+              lv_bar_set_value(b, wmin, LV_ANIM_OFF);
+              continue;
+            }
+            int l = (int) lroundf(lo[i]), h = (int) lroundf(hi[i]);
+            if (h < l) std::swap(h, l);
+            lv_bar_set_value(b, h, LV_ANIM_OFF);
+            lv_bar_set_start_value(b, l, LV_ANIM_OFF);
+          }
+      - script.execute: update_daily_precip
+
+  - id: align_sun_deck
+    then:
+      - lambda: |-
+          lv_obj_update_layout(id(sun_header_time));
+          lv_obj_align_to(id(sun_deck_temp), id(sun_header_time), LV_ALIGN_OUT_LEFT_MID, -18, 0);
+  - id: update_hourly_winds
+    then:
+      - lvgl.label.update:
+          id: hourly_header_time
+          text: !lambda |-
+            auto t = id(ha_time).now();
+            char buf[12];
+            int hour = t.hour > 12 ? t.hour - 12 : (t.hour == 0 ? 12 : t.hour);
+            snprintf(buf, sizeof(buf), "%d:%02d %s", hour, t.minute, t.hour >= 12 ? "PM" : "AM");
+            return std::string(buf);
+
+      # Hour 0
+      - lvgl.label.update:
+          id: hour0_label
+          text: "Now"
+      - lvgl.label.update:
+          id: hour0_dir
+          text: !lambda 'return id(hour0_wind_dir).state;'
+      - lvgl.label.update:
+          id: hour0_spd
+          text: !lambda 'return std::to_string((int)id(hour0_wind_speed).state) + " mph";'
+
+      # Hour 1
+      - lvgl.label.update:
+          id: hour1_label
+          text: !lambda |-
+            time_t ts = id(ha_time).now().timestamp + 3600;
+            auto t = ESPTime::from_epoch_local(ts);
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%d %s", t.hour > 12 ? t.hour - 12 : (t.hour == 0 ? 12 : t.hour), t.hour >= 12 ? "PM" : "AM");
+            return std::string(buf);
+      - lvgl.label.update:
+          id: hour1_dir
+          text: !lambda 'return id(hour1_wind_dir).state;'
+      - lvgl.label.update:
+          id: hour1_spd
+          text: !lambda 'return std::to_string((int)id(hour1_wind_speed).state) + " mph";'
+
+      # Hour 2
+      - lvgl.label.update:
+          id: hour2_label
+          text: !lambda |-
+            time_t ts = id(ha_time).now().timestamp + 7200;
+            auto t = ESPTime::from_epoch_local(ts);
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%d %s", t.hour > 12 ? t.hour - 12 : (t.hour == 0 ? 12 : t.hour), t.hour >= 12 ? "PM" : "AM");
+            return std::string(buf);
+      - lvgl.label.update:
+          id: hour2_dir
+          text: !lambda 'return id(hour2_wind_dir).state;'
+      - lvgl.label.update:
+          id: hour2_spd
+          text: !lambda 'return std::to_string((int)id(hour2_wind_speed).state) + " mph";'
+
+      # Hour 3
+      - lvgl.label.update:
+          id: hour3_label
+          text: !lambda |-
+            time_t ts = id(ha_time).now().timestamp + 10800;
+            auto t = ESPTime::from_epoch_local(ts);
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%d %s", t.hour > 12 ? t.hour - 12 : (t.hour == 0 ? 12 : t.hour), t.hour >= 12 ? "PM" : "AM");
+            return std::string(buf);
+      - lvgl.label.update:
+          id: hour3_dir
+          text: !lambda 'return id(hour3_wind_dir).state;'
+      - lvgl.label.update:
+          id: hour3_spd
+          text: !lambda 'return std::to_string((int)id(hour3_wind_speed).state) + " mph";'
+
+  # Daily precip chance on the main-page compact 5-day rows, from sensor.mancave_daily_precip
+  # state: "p0|p1|p2|p3|p4" (ints, day 0 = today). Shown only when > 0; when shown,
+  # the day name moves up 8 px and the % sits under it (rows without rain are unchanged).
+  - id: update_daily_precip
+    then:
+      - lambda: |-
+          lv_obj_t *names[5] = {id(main_day0_name), id(main_day1_name), id(main_day2_name), id(main_day3_name), id(main_day4_name)};
+          lv_obj_t *pops[5] = {id(main_day0_pop), id(main_day1_pop), id(main_day2_pop), id(main_day3_pop), id(main_day4_pop)};
+          std::string s = id(ha_daily_precip).state;
+          bool valid = !(s.empty() || s == "unknown" || s == "unavailable");
+          size_t pos = 0;
+          for (int i = 0; i < 5; i++) {
+            int v = -1;
+            if (valid && pos <= s.size()) {
+              size_t end = s.find('|', pos);
+              if (end == std::string::npos) end = s.size();
+              std::string fld = s.substr(pos, end - pos);
+              pos = end + 1;
+              if (!fld.empty()) {
+                char *ep = nullptr;
+                double d = strtod(fld.c_str(), &ep);
+                if (ep != fld.c_str() && *ep == '\0' && !std::isnan(d)) v = (int) lround(d);
+              }
+            }
+            if (v > 100) v = 100;
+            int base = 16 + 48 * i;
+            if (v > 0) {
+              char buf[8];
+              snprintf(buf, sizeof(buf), "%d%%", v);
+              lv_label_set_text(pops[i], buf);
+              lv_obj_clear_flag(pops[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_y(names[i], base - 8);
+            } else {
+              lv_label_set_text(pops[i], "");
+              lv_obj_add_flag(pops[i], LV_OBJ_FLAG_HIDDEN);
+              lv_obj_set_y(names[i], base);
+            }
+          }
+
+  # Rain line under the Indoor box (Ecowitt GW1100B). Shown only while event rain > 0.
+  - id: update_rain_line
+    then:
+      - lambda: |-
+          float ev = id(ha_event_rain).state;
+          float rt = id(ha_rain_rate).state;
+          if (std::isnan(ev) || ev <= 0.0f) {
+            lv_obj_add_flag(id(rain_line), LV_OBJ_FLAG_HIDDEN);
+            return;
+          }
+          char buf[64];
+          if (std::isnan(rt))
+            snprintf(buf, sizeof(buf), "Event Rain %.2f in   Rate/Hr -- in", ev);
+          else
+            snprintf(buf, sizeof(buf), "Event Rain %.2f in   Rate/Hr %.2f in", ev, rt);
+          lv_label_set_text(id(rain_line), buf);
+          lv_obj_clear_flag(id(rain_line), LV_OBJ_FLAG_HIDDEN);
+
+  - id: show_fc_panel
+    then:
+      - lambda: |-
+          lv_obj_t *panels[3] = {id(fc_panel_5day), id(fc_panel_hourly), id(fc_panel_sun)};
+          int p = id(fc_panel);
+          if (p < 0 || p > 2) p = 0;
+          for (int i = 0; i < 3; i++) {
+            if (i == p) lv_obj_clear_flag(panels[i], LV_OBJ_FLAG_HIDDEN);
+            else lv_obj_add_flag(panels[i], LV_OBJ_FLAG_HIDDEN);
+          }
+
+  # Hourly panel, from sensor.mancave_hourly_4h
+  # state: "epoch|label|temp|condition|precip;epoch|label|..." (up to 4 entries)
+  - id: update_hourly_panels
+    then:
+      - lambda: |-
+          lv_obj_t *t_lbl[4] = {id(main_hr0_time), id(main_hr1_time), id(main_hr2_time), id(main_hr3_time)};
+          lv_obj_t *i_lbl[4] = {id(main_hr0_icon), id(main_hr1_icon), id(main_hr2_icon), id(main_hr3_icon)};
+          lv_obj_t *tp_lbl[4] = {id(main_hr0_temp), id(main_hr1_temp), id(main_hr2_temp), id(main_hr3_temp)};
+          lv_obj_t *pp_lbl[4] = {id(main_hr0_pop), id(main_hr1_pop), id(main_hr2_pop), id(main_hr3_pop)};
+
+          // ISO "2026-11-10T11:41:23+00:00" (UTC) -> epoch, 0 on failure
+          auto iso_epoch = [](const std::string &iso) -> time_t {
+            if (iso.size() < 19) return 0;
+            int y = 0, mo = 0, d = 0, h = 0, mi = 0, s = 0;
+            if (sscanf(iso.c_str(), "%d-%d-%dT%d:%d:%d", &y, &mo, &d, &h, &mi, &s) != 6) return 0;
+            ESPTime utc{};
+            utc.year = y; utc.month = mo; utc.day_of_month = d;
+            utc.hour = h; utc.minute = mi; utc.second = s;
+            utc.recalc_timestamp_utc(false);
+            return utc.timestamp;
+          };
+          std::string sun = id(ha_sun_state).state;
+          time_t next_rise = iso_epoch(id(ha_next_rising).state);
+          time_t next_set = iso_epoch(id(ha_next_setting).state);
+
+          // split state into up to 4 entries of 5 fields
+          std::string s = id(ha_hourly4).state;
+          bool valid = !(s.empty() || s == "unknown" || s == "unavailable");
+          std::string f[4][5];
+          int n = 0;
+          size_t pos = 0;
+          while (valid && n < 4 && pos <= s.size()) {
+            size_t end = s.find(';', pos);
+            if (end == std::string::npos) end = s.size();
+            std::string e = s.substr(pos, end - pos);
+            int k = 0;
+            size_t p2 = 0;
+            while (k < 5) {
+              size_t bar = e.find('|', p2);
+              if (bar == std::string::npos) { f[n][k++] = e.substr(p2); break; }
+              f[n][k++] = e.substr(p2, bar - p2);
+              p2 = bar + 1;
+            }
+            if (k == 5 && !f[n][1].empty()) n++;
+            pos = end + 1;
+          }
+
+          for (int i = 0; i < 4; i++) {
+            if (i >= n) {
+              lv_label_set_text(t_lbl[i], "--");
+              lv_label_set_text(i_lbl[i], "");
+              lv_label_set_text(tp_lbl[i], "--°");
+              lv_label_set_text(pp_lbl[i], "--%");
+              continue;
+            }
+            int temp = atoi(f[i][2].c_str());
+            int pop = atoi(f[i][4].c_str());
+            if (pop < 0) pop = 0;
+            if (pop > 100) pop = 100;
+            char buf[16];
+
+            lv_label_set_text(t_lbl[i], f[i][1].c_str());
+            snprintf(buf, sizeof(buf), "%d°", temp);
+            lv_label_set_text(tp_lbl[i], buf);
+            snprintf(buf, sizeof(buf), "%d%%", pop);
+            lv_label_set_text(pp_lbl[i], buf);
+
+            // Day or night for the middle of this forecast hour, from sun.sun
+            // (sun up now: day until next_setting; sun down now: day from next_rising).
+            time_t mid = (time_t) atoll(f[i][0].c_str()) + 1800;
+            bool is_day;
+            if (sun == "above_horizon") is_day = (next_set == 0) || (mid < next_set);
+            else if (sun == "below_horizon") is_day = (next_rise != 0) && (mid >= next_rise);
+            else is_day = true;
+
+            std::string c = f[i][3];
+            for (char &ch : c) ch = tolower(ch);
+            const char *glyph;
+            uint32_t color;
+            // night versions of clear / partly cloudy; the source says clear-night even in daytime
+            if (c == "clear-night" || c == "sunny" || c == "clear") {
+              if (is_day) { glyph = "\uF00D"; color = 0xFFCC00; }
+              else { glyph = "\uF02E"; color = 0xCFD8DC; }
+            } else if (c == "partlycloudy" || c == "partly-cloudy") {
+              if (is_day) { glyph = "\uF002"; color = 0xFFCC00; }
+              else { glyph = "\uF086"; color = 0xCFD8DC; }
+            }
+            // everything else: same mapping as the 5-day rows
+            else if (c.find("fog") != std::string::npos || c.find("mist") != std::string::npos) { glyph = "\uF014"; color = 0x90A4AE; }
+            else if (c.find("sunny") != std::string::npos || c.find("clear") != std::string::npos) { glyph = "\uF00D"; color = 0xFFCC00; }
+            else if (c.find("partly") != std::string::npos) { glyph = "\uF002"; color = 0xFFCC00; }
+            else if (c.find("cloud") != std::string::npos || c.find("overcast") != std::string::npos) { glyph = "\uF013"; color = 0xAAAAAA; }
+            else if (c.find("rain") != std::string::npos || c.find("pour") != std::string::npos || c.find("shower") != std::string::npos) { glyph = "\uF019"; color = 0x4FC3F7; }
+            else if (c.find("thunder") != std::string::npos || c.find("lightning") != std::string::npos || c.find("storm") != std::string::npos) { glyph = "\uF01E"; color = 0x7E57C2; }
+            else if (c.find("snow") != std::string::npos) { glyph = "\uF01B"; color = 0xE0E0E0; }
+            else { glyph = "\uF013"; color = 0xAAAAAA; }
+            lv_label_set_text(i_lbl[i], glyph);
+            lv_obj_set_style_text_color(i_lbl[i], lv_color_hex(color), LV_PART_MAIN);
+          }
+
+  # Sun & moon panel (sun.sun next_rising / next_setting / next_noon + sensor.moon)
+  - id: update_sun_panel
+    then:
+      - lambda: |-
+          auto iso_epoch = [](const std::string &iso) -> time_t {
+            if (iso.size() < 19) return 0;
+            int y = 0, mo = 0, d = 0, h = 0, mi = 0, s = 0;
+            if (sscanf(iso.c_str(), "%d-%d-%dT%d:%d:%d", &y, &mo, &d, &h, &mi, &s) != 6) return 0;
+            ESPTime utc{};
+            utc.year = y; utc.month = mo; utc.day_of_month = d;
+            utc.hour = h; utc.minute = mi; utc.second = s;
+            utc.recalc_timestamp_utc(false);
+            return utc.timestamp;
+          };
+          auto fmt = [](time_t ts, lv_obj_t *lbl) {
+            if (ts == 0) { lv_label_set_text(lbl, "--:--"); return; }
+            ESPTime local = ESPTime::from_epoch_local(ts);
+            int hour = local.hour > 12 ? local.hour - 12 : (local.hour == 0 ? 12 : local.hour);
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%d:%02d %s", hour, local.minute, local.hour >= 12 ? "PM" : "AM");
+            lv_label_set_text(lbl, buf);
+          };
+          time_t rise = iso_epoch(id(ha_next_rising).state);
+          time_t set = iso_epoch(id(ha_next_setting).state);
+          time_t noon = iso_epoch(id(ha_next_noon).state);
+          fmt(rise, id(main_sun_rise));
+          fmt(set, id(main_sun_set));
+          fmt(noon, id(main_sun_noon));
+          // Day length for a LOCAL calendar date, NOAA solar equations,
+          // sunrise/sunset at -0.833 deg altitude, at your latitude/longitude.
+          // days since 1970-01-01 for a civil date (so "yesterday" is just days - 1, DST-proof)
+          auto civil_days = [](int y, int m, int d) -> int {
+            int yy = y - (m <= 2 ? 1 : 0);
+            int era = (yy >= 0 ? yy : yy - 399) / 400;
+            int yoe = yy - era * 400;
+            int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+            int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+            return era * 146097 + doe - 719468;
+          };
+          // sunrise / noon / sunset in minutes after 0h UTC of that date
+          auto rs_min = [](int days, double &rise, double &noon, double &set) {
+            const double LAT = ${latitude}, LON = ${longitude};
+            const double R = M_PI / 180.0;
+            double jd0 = (double) days + 2440587.5;  // 0h UTC of that date
+            auto ev = [&](double jd, double &decl, double &eot) {
+              double T = (jd - 2451545.0) / 36525.0;
+              double L0 = fmod(280.46646 + T * (36000.76983 + T * 0.0003032), 360.0);
+              double M = 357.52911 + T * (35999.05029 - 0.0001537 * T);
+              double e = 0.016708634 - T * (0.000042037 + 0.0000001267 * T);
+              double C = sin(M * R) * (1.914602 - T * (0.004817 + 0.000014 * T)) +
+                         sin(2 * M * R) * (0.019993 - 0.000101 * T) + sin(3 * M * R) * 0.000289;
+              double om = 125.04 - 1934.136 * T;
+              double lam = L0 + C - 0.00569 - 0.00478 * sin(om * R);
+              double eps0 = 23.0 + (26.0 + (21.448 - T * (46.815 + T * (0.00059 - T * 0.001813))) / 60.0) / 60.0;
+              double eps = eps0 + 0.00256 * cos(om * R);
+              decl = asin(sin(eps * R) * sin(lam * R));
+              double yv = tan(eps * R / 2) * tan(eps * R / 2);
+              eot = 4.0 / R * (yv * sin(2 * L0 * R) - 2 * e * sin(M * R) + 4 * e * yv * sin(M * R) * cos(2 * L0 * R) -
+                               0.5 * yv * yv * sin(4 * L0 * R) - 1.25 * e * e * sin(2 * M * R));
+            };
+            auto ha = [&](double decl) -> double {
+              double x = cos(90.833 * R) / (cos(LAT * R) * cos(decl)) - tan(LAT * R) * tan(decl);
+              if (x > 1) x = 1;
+              if (x < -1) x = -1;
+              return acos(x) / R;
+            };
+            double decl, eot;
+            ev(jd0 + 0.5, decl, eot);
+            rise = 720 - 4 * LON - eot - 4 * ha(decl);
+            set = 720 - 4 * LON - eot + 4 * ha(decl);
+            noon = 720 - 4 * LON - eot;
+            for (int k = 0; k < 2; k++) {  // refine declination/EoT at the event times
+              ev(jd0 + rise / 1440.0, decl, eot);
+              rise = 720 - 4 * LON - eot - 4 * ha(decl);
+              ev(jd0 + set / 1440.0, decl, eot);
+              set = 720 - 4 * LON - eot + 4 * ha(decl);
+              ev(jd0 + noon / 1440.0, decl, eot);
+              noon = 720 - 4 * LON - eot;
+            }
+          };
+          // Offsets (seconds) from the computed sea-level times to HA's sun.sun times.
+          // HA's next_rising / next_setting / next_noon are always the NEXT event, so each
+          // offset is measured on that event's own local date. Day-to-day the offset changes
+          // by well under a second, so computed + offset matches HA for today and tomorrow.
+          auto now = id(ha_time).now();
+          if (now.is_valid()) {
+            auto off_for = [&](time_t ev_ts, int which, double &off) -> bool {
+              if (ev_ts == 0) return false;   // HA value missing / unknown: keep the last offset
+              ESPTime l = ESPTime::from_epoch_local(ev_ts);
+              int d = civil_days(l.year, l.month, l.day_of_month);
+              double r, n, s;
+              rs_min(d, r, n, s);
+              double m = which == 0 ? r : (which == 1 ? s : n);
+              double o = (double) ev_ts - ((double) d * 86400.0 + m * 60.0);
+              if (fabs(o) > 1800.0) return false;   // not a sensible match, ignore
+              off = o;
+              return true;
+            };
+            double o_r = id(sun_off_rise), o_s = id(sun_off_set), o_n = id(sun_off_noon);
+            off_for(rise, 0, o_r);
+            off_for(set, 1, o_s);
+            off_for(noon, 2, o_n);
+            if (o_r != id(sun_off_rise) || o_s != id(sun_off_set) || o_n != id(sun_off_noon)) {
+              id(sun_off_rise) = o_r;
+              id(sun_off_set) = o_s;
+              id(sun_off_noon) = o_n;
+              id(update_sun_page).execute();   // Sun page picks up HA's times right away
+            }
+          }
+          // day length with HA's times (computed length + the HA set/rise offsets)
+          auto day_len_s = [&](int days) -> double {
+            double r, n, s;
+            rs_min(days, r, n, s);
+            return (s - r) * 60.0 + id(sun_off_set) - id(sun_off_rise);
+          };
+          // "9h 59m (−2m 17s)"  (U+2212 minus and '+' are in small_info_font)
+          auto fmt_len = [](double today, double yday, char *buf, size_t n) {
+            long lm = lround(today / 60.0);
+            long dsec = lround(today - yday);
+            const char *sign = dsec < 0 ? "\u2212" : "+";
+            long a = labs(dsec);
+            if (a >= 60) snprintf(buf, n, "%ldh %02ldm (%s%ldm %02lds)", lm / 60, lm % 60, sign, a / 60, a % 60);
+            else snprintf(buf, n, "%ldh %02ldm (%s%lds)", lm / 60, lm % 60, sign, a);
+          };
+          if (now.is_valid()) {
+            int today = civil_days(now.year, now.month, now.day_of_month);
+            char buf[40];
+            fmt_len(day_len_s(today), day_len_s(today - 1), buf, sizeof(buf));
+            lv_label_set_text(id(main_sun_len), buf);
+          } else {
+            lv_label_set_text(id(main_sun_len), "--");
+          }
+
+          std::string m = id(ha_moon).state;
+          struct P { const char *state; const char *name; const char *glyph; };
+          static const P phases[] = {
+            {"new_moon", "New Moon", "\U000F0F64"},
+            {"waxing_crescent", "Waxing Crescent", "\U000F0F67"},
+            {"first_quarter", "First Quarter", "\U000F0F61"},
+            {"waxing_gibbous", "Waxing Gibbous", "\U000F0F68"},
+            {"full_moon", "Full Moon", "\U000F0F62"},
+            {"waning_gibbous", "Waning Gibbous", "\U000F0F66"},
+            {"last_quarter", "Last Quarter", "\U000F0F63"},
+            {"waning_crescent", "Waning Crescent", "\U000F0F65"},
+          };
+          const P *hit = nullptr;
+          for (auto &p : phases) if (m == p.state) { hit = &p; break; }
+          lv_label_set_text(id(main_moon_icon), hit ? hit->glyph : "");
+          lv_label_set_text(id(main_moon_name), hit ? hit->name : "Moon --");
+
+  # ===== Sun page countdown: shown only in the last hour before sunrise / sunset =====
+  # Live M:SS timer, pulses in the final minute, hidden at the event and the rest of the day.
+  - id: update_sun_countdown
+    then:
+      - lambda: |-
+          lv_obj_t *lbl = id(sun_countdown);
+          // pulse: label opacity 255 -> 70 -> 255 once a second (LVGL animation)
+          static const lv_anim_exec_xcb_t PULSE = [](void *var, int32_t v) {
+            lv_obj_set_style_opa((lv_obj_t *) var, (lv_opa_t) v, LV_PART_MAIN);
+          };
+          static int state = -1;      // 0 hidden, 1 shown, 2 shown + pulsing
+          static long last_rem = -1;
+          static bool last_up = false;
+          auto now = id(ha_time).now();
+          long rem = 0;
+          bool up = false;
+          if (now.is_valid() && id(sun_cd_set) > 0) {
+            double ts = (double) now.timestamp;
+            double target;
+            if (ts < id(sun_cd_rise)) target = id(sun_cd_rise);              // before dawn
+            else if (ts <= id(sun_cd_set)) { target = id(sun_cd_set); up = true; }  // sun up
+            else target = id(sun_cd_rise_next);                              // after sunset
+            rem = (long) ceil(target - ts);   // whole seconds left (0 at the event)
+          }
+          int want = (rem >= 1 && rem < 3600) ? (rem <= 60 ? 2 : 1) : 0;
+          if (want != state) {
+            if (state == 2 || state == -1) {
+              lv_anim_delete(lbl, PULSE);
+              lv_obj_set_style_opa(lbl, LV_OPA_COVER, LV_PART_MAIN);
+            }
+            if (want == 0) lv_obj_add_flag(lbl, LV_OBJ_FLAG_HIDDEN);
+            else lv_obj_clear_flag(lbl, LV_OBJ_FLAG_HIDDEN);
+            if (want == 2) {
+              lv_anim_t a;
+              lv_anim_init(&a);
+              lv_anim_set_var(&a, lbl);
+              lv_anim_set_exec_cb(&a, PULSE);
+              lv_anim_set_values(&a, LV_OPA_COVER, 70);
+              lv_anim_set_duration(&a, 500);
+              lv_anim_set_reverse_duration(&a, 500);
+              lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+              lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+              lv_anim_start(&a);
+            }
+            state = want;
+            last_rem = -1;
+          }
+          if (want == 0) return;
+          if (up != last_up || last_rem == -1)
+            lv_obj_set_style_text_color(lbl, lv_color_hex(up ? 0xFFAA00 : 0x90A4AE), LV_PART_MAIN);
+          if (rem != last_rem || up != last_up) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%s in %ld:%02ld", up ? "Sunset" : "Sunrise", rem / 60, rem % 60);
+            lv_label_set_text(lbl, buf);
+          }
+          last_rem = rem;
+          last_up = up;
+
+  # ===== Sun page: NOAA solar position computed on the device =====
+  # Path curves are rebuilt once per day; the sun position updates every minute.
+  - id: update_sun_page
+    then:
+      - lambda: |-
+          auto now = id(ha_time).now();
+          if (!now.is_valid()) return;
+          // ---- NOAA solar position (same equations as the day-length code) ----
+          const double LAT = ${latitude}, LON = ${longitude};
+          const double R = M_PI / 180.0;
+          auto civil_days = [](int y, int m, int d) -> int {
+            int yy = y - (m <= 2 ? 1 : 0);
+            int era = (yy >= 0 ? yy : yy - 399) / 400;
+            int yoe = yy - era * 400;
+            int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+            int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+            return era * 146097 + doe - 719468;
+          };
+          // solar declination (rad) and equation of time (min) at a Julian day
+          auto ev = [&](double jd, double &decl, double &eot) {
+            double T = (jd - 2451545.0) / 36525.0;
+            double L0 = fmod(280.46646 + T * (36000.76983 + T * 0.0003032), 360.0);
+            double M = 357.52911 + T * (35999.05029 - 0.0001537 * T);
+            double e = 0.016708634 - T * (0.000042037 + 0.0000001267 * T);
+            double C = sin(M * R) * (1.914602 - T * (0.004817 + 0.000014 * T)) +
+                       sin(2 * M * R) * (0.019993 - 0.000101 * T) + sin(3 * M * R) * 0.000289;
+            double om = 125.04 - 1934.136 * T;
+            double lam = L0 + C - 0.00569 - 0.00478 * sin(om * R);
+            double eps0 = 23.0 + (26.0 + (21.448 - T * (46.815 + T * (0.00059 - T * 0.001813))) / 60.0) / 60.0;
+            double eps = eps0 + 0.00256 * cos(om * R);
+            decl = asin(sin(eps * R) * sin(lam * R));
+            double yv = tan(eps * R / 2) * tan(eps * R / 2);
+            eot = 4.0 / R * (yv * sin(2 * L0 * R) - 2 * e * sin(M * R) + 4 * e * yv * sin(M * R) * cos(2 * L0 * R) -
+                             0.5 * yv * yv * sin(4 * L0 * R) - 1.25 * e * e * sin(2 * M * R));
+          };
+          // refracted elevation and azimuth (degrees, azimuth clockwise from north) at a unix time
+          auto sun_pos = [&](double ts, double &el, double &az) {
+            double decl, eot;
+            ev(ts / 86400.0 + 2440587.5, decl, eot);
+            double tst = fmod(fmod(ts, 86400.0) / 60.0 + eot + 4.0 * LON, 1440.0);
+            if (tst < 0) tst += 1440.0;
+            double H = tst / 4.0 - 180.0;
+            double cz = sin(LAT * R) * sin(decl) + cos(LAT * R) * cos(decl) * cos(H * R);
+            if (cz > 1) cz = 1;
+            if (cz < -1) cz = -1;
+            double z = acos(cz);
+            double e = 90.0 - z / R;
+            double rf = 0;  // NOAA atmospheric refraction approximation (arcsec)
+            if (e <= 85.0) {
+              double te = tan(e * R);
+              if (e > 5.0) rf = 58.1 / te - 0.07 / (te * te * te) + 0.000086 / pow(te, 5);
+              else if (e > -0.575) rf = 1735.0 + e * (-518.2 + e * (103.4 + e * (-12.79 + e * 0.711)));
+              else rf = -20.772 / te;
+            }
+            el = e + rf / 3600.0;
+            double den = cos(LAT * R) * sin(z);
+            if (fabs(den) < 1e-9) { az = 180.0; return; }
+            double c = (sin(LAT * R) * cz - sin(decl)) / den;
+            if (c > 1) c = 1;
+            if (c < -1) c = -1;
+            double a = acos(c) / R;
+            az = H > 0 ? fmod(a + 180.0, 360.0) : fmod(540.0 - a, 360.0);
+          };
+          // sunrise / solar noon / sunset (unix time) for a local civil date (days since 1970-01-01)
+          auto rise_set = [&](int days, double &rise_ts, double &noon_ts, double &set_ts) {
+            auto ha = [&](double decl) -> double {
+              double x = cos(90.833 * R) / (cos(LAT * R) * cos(decl)) - tan(LAT * R) * tan(decl);
+              if (x > 1) x = 1;
+              if (x < -1) x = -1;
+              return acos(x) / R;
+            };
+            double jd0 = (double) days + 2440587.5;  // 0h UTC of that date
+            double decl, eot;
+            ev(jd0 + 0.5, decl, eot);
+            double rise = 720 - 4 * LON - eot - 4 * ha(decl);
+            double set = 720 - 4 * LON - eot + 4 * ha(decl);
+            double noon = 720 - 4 * LON - eot;
+            for (int k = 0; k < 2; k++) {  // refine at the event times
+              ev(jd0 + rise / 1440.0, decl, eot);
+              rise = 720 - 4 * LON - eot - 4 * ha(decl);
+              ev(jd0 + set / 1440.0, decl, eot);
+              set = 720 - 4 * LON - eot + 4 * ha(decl);
+              ev(jd0 + noon / 1440.0, decl, eot);
+              noon = 720 - 4 * LON - eot;
+            }
+            double base = (double) days * 86400.0;
+            rise_ts = base + rise * 60.0;
+            noon_ts = base + noon * 60.0;
+            set_ts = base + set * 60.0;
+          };
+          // ---- chart geometry (pixels inside sun_chart, 520x355) ----
+          const int PL = 44, PR = 505, PT = 30, HY = 285;
+          const double EL_MAX = 75.0, AZ0 = 45.0, AZ1 = 315.0;
+          auto X = [&](double az) -> int {
+            if (az < AZ0) az = AZ0;
+            if (az > AZ1) az = AZ1;
+            return (int) lround(PL + (az - AZ0) * (PR - PL) / (AZ1 - AZ0));
+          };
+          auto Y = [&](double el) -> int {
+            if (el < 0) el = 0;
+            if (el > EL_MAX) el = EL_MAX;
+            return (int) lround(HY - el * (HY - PT) / EL_MAX);
+          };
+          auto fmt_time = [](double ts, char *b, size_t n) {
+            ESPTime t = ESPTime::from_epoch_local((time_t) ts);
+            int h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+            snprintf(b, n, "%d:%02d %s", h, t.minute, t.hour >= 12 ? "PM" : "AM");
+          };
+          const int NP = 61;   // points per path curve
+          const int NR = 25;   // points on the compass daylight arc
+          const int CX = 125, CY = 235, CR = 50;  // compass centre/radius inside sun_box
+          static lv_point_precise_t p_today[NP], p_summer[NP], p_winter[NP], p_done[NP + 1];
+          static lv_point_precise_t p_drop[2], p_needle[2], p_ring[NR];
+          static int last_days = -1;
+          static double rise_ts = 0, noon_ts = 0, set_ts = 0;   // computed (path geometry)
+          // displayed times = computed + offset to HA's sun.sun (whole seconds)
+          const double off_r = id(sun_off_rise), off_s = id(sun_off_set), off_n = id(sun_off_noon);
+          auto ha_t = [](double t, double off) -> double { return floor(t + off + 0.5); };
+          static double last_off_r = 0, last_off_s = 0, last_off_n = 0;
+          static int night_x = 10, night_y = -1;  // night message spot (-1 = one line in the top strip)
+          char buf[48];
+          int days = civil_days(now.year, now.month, now.day_of_month);
+
+          // ---- once a day: today's path, solstice paths, rise/set/max labels ----
+          if (days != last_days || off_r != last_off_r || off_s != last_off_s || off_n != last_off_n) {
+            last_days = days;
+            last_off_r = off_r;
+            last_off_s = off_s;
+            last_off_n = off_n;
+            auto fill_path = [&](int d, lv_point_precise_t *pts) {
+              double r, n, s;
+              rise_set(d, r, n, s);
+              for (int k = 0; k < NP; k++) {
+                double el, az;
+                sun_pos(r + (s - r) * k / (NP - 1), el, az);
+                pts[k].x = X(az);
+                pts[k].y = Y(el);
+              }
+            };
+            rise_set(days, rise_ts, noon_ts, set_ts);
+            fill_path(days, p_today);
+            fill_path(civil_days(now.year, 6, 21), p_summer);
+            fill_path(civil_days(now.year, 12, 21), p_winter);
+            lv_line_set_points(id(sun_path_today)->obj, p_today, NP);
+            lv_line_set_points(id(sun_path_summer)->obj, p_summer, NP);
+            lv_line_set_points(id(sun_path_winter)->obj, p_winter, NP);
+            lv_obj_set_pos(id(sun_lbl_summer), 78, 92);  // fixed spot in open sky left of the Jun arc
+            lv_obj_set_pos(id(sun_lbl_winter), (int) p_winter[NP / 2].x - 30, (int) p_winter[NP / 2].y + 6);
+
+            double el, az, raz, saz;
+            sun_pos(rise_ts, el, raz);
+            sun_pos(set_ts, el, saz);
+            snprintf(buf, sizeof(buf), "Rise %d\u00B0", (int) lround(raz));
+            lv_label_set_text(id(sun_lbl_rise), buf);
+            lv_obj_set_pos(id(sun_lbl_rise), std::max(2, X(raz) - 16), HY + 32);
+            snprintf(buf, sizeof(buf), "Set %d\u00B0", (int) lround(saz));
+            lv_label_set_text(id(sun_lbl_set), buf);
+            lv_obj_set_pos(id(sun_lbl_set), std::min(520 - 2 - 110, X(saz) + 16 - 110), HY + 32);
+
+            sun_pos(noon_ts, el, az);
+            char tb[16];
+            fmt_time(ha_t(noon_ts, off_n), tb, sizeof(tb));
+            snprintf(buf, sizeof(buf), "Max %.1f\u00B0 at %s", el, tb);
+            lv_label_set_text(id(sun_lbl_apex), buf);
+            lv_obj_set_pos(id(sun_lbl_apex), X(az) - 120, std::max(2, Y(el) - 30));
+
+            // Night message spot. Normally one line in the empty strip above every path (y 4..32).
+            // Around midsummer the Max label sits up there, so find a clear 2-line box inside the
+            // Jun 21 arc that misses all three paths and the Max / Jun 21 / Dec 21 labels.
+            {
+              int ax = X(az), ay = std::max(2, Y(el) - 30);
+              night_y = -1;
+              if (ay < 40) {
+                const int W = 204, HH = 58, M = 6;
+                const lv_point_precise_t *paths[3] = {p_today, p_summer, p_winter};
+                const int sx = (int) p_summer[NP / 2].x, sy = (int) p_summer[NP / 2].y;
+                const int wx = (int) p_winter[NP / 2].x, wy = (int) p_winter[NP / 2].y;
+                const int bx[3][4] = {{ax - 93, ay, ax + 93, ay + 22},
+                                      {sx + 10, sy - 4, sx + 66, sy + 18},
+                                      {wx - 30, wy + 6, wx + 26, wy + 28}};
+                const int cx = (int) p_today[NP / 2].x;
+                const int x0 = cx - W / 2 - M, x1 = cx + W / 2 + M;
+                for (int y = 4; y < HY - HH - 4 && night_y < 0; y += 2) {
+                  const int y0 = y - M, y1 = y + HH + M;
+                  bool ok = true;
+                  for (int b = 0; b < 3 && ok; b++)
+                    if (!(x1 < bx[b][0] || x0 > bx[b][2] || y1 < bx[b][1] || y0 > bx[b][3])) ok = false;
+                  for (int p = 0; p < 3 && ok; p++)
+                    for (int k = 0; k + 1 < NP && ok; k++)
+                      for (int j = 0; j < 4 && ok; j++) {
+                        float px = (float) paths[p][k].x + ((float) paths[p][k + 1].x - (float) paths[p][k].x) * j / 4.0f;
+                        float py = (float) paths[p][k].y + ((float) paths[p][k + 1].y - (float) paths[p][k].y) * j / 4.0f;
+                        if (px >= x0 && px <= x1 && py >= y0 && py <= y1) ok = false;
+                      }
+                  if (ok) {
+                    night_y = y;
+                    night_x = cx - 150;
+                  }
+                }
+              }
+            }
+
+            long lm = lround(((set_ts + off_s) - (rise_ts + off_r)) / 60.0);
+            snprintf(buf, sizeof(buf), "Day length  %ldh %02ldm", lm / 60, lm % 60);
+            lv_label_set_text(id(sun_daylen), buf);
+
+            // daylight arc on the compass ring, sunrise azimuth -> sunset azimuth
+            for (int k = 0; k < NR; k++) {
+              double a = (raz + (saz - raz) * k / (NR - 1)) * R;
+              p_ring[k].x = (int) lround(CX + CR * sin(a));
+              p_ring[k].y = (int) lround(CY - CR * cos(a));
+            }
+            lv_line_set_points(id(sun_ring_day)->obj, p_ring, NR);
+          }
+
+          // ---- every minute: current position ----
+          double ts = (double) now.timestamp;
+          double el, az;
+          sun_pos(ts, el, az);
+          const double rise_ha = ha_t(rise_ts, off_r), set_ha = ha_t(set_ts, off_s);
+          bool up = ts >= rise_ha && ts <= set_ha;
+
+          snprintf(buf, sizeof(buf), "%.1f\u00B0", el);
+          lv_label_set_text(id(sun_el_val), buf);
+          lv_obj_set_style_text_color(id(sun_el_val), lv_color_hex(up ? 0xFFCC00 : 0x90A4AE), LV_PART_MAIN);
+          static const char *dirs[] = {"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+                                        "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"};
+          snprintf(buf, sizeof(buf), "%d\u00B0 %s", ((int) lround(az)) % 360, dirs[((int) ((az + 11.25) / 22.5)) % 16]);
+          lv_label_set_text(id(sun_az_val), buf);
+
+          const char *phase;
+          if (el >= 6.0) phase = "Daylight";
+          else if (up) phase = "Golden hour";
+          else if (el > -6.0) phase = "Civil twilight";
+          else if (el > -12.0) phase = "Nautical twilight";
+          else if (el > -18.0) phase = "Astronomical twilight";
+          else phase = "Night";
+          lv_label_set_text(id(sun_phase), phase);
+
+          if (up && el > 0.5) {
+            double ratio = 1.0 / tan(el * R);
+            if (ratio < 10) snprintf(buf, sizeof(buf), "Shadow  %.1f\u00D7 height", ratio);
+            else snprintf(buf, sizeof(buf), "Shadow  %.0f\u00D7 height", ratio);
+          } else {
+            snprintf(buf, sizeof(buf), "Shadow  --");
+          }
+          lv_label_set_text(id(sun_shadow), buf);
+
+          // compass needle (dim when the sun is down)
+          double a = az * R;
+          p_needle[0].x = CX;
+          p_needle[0].y = CY;
+          p_needle[1].x = (int) lround(CX + (CR - 6) * sin(a));
+          p_needle[1].y = (int) lround(CY - (CR - 6) * cos(a));
+          lv_line_set_points(id(sun_needle)->obj, p_needle, 2);
+          lv_obj_set_style_line_color(id(sun_needle)->obj, lv_color_hex(up ? 0xFFCC00 : 0x607D8B), LV_PART_MAIN);
+          lv_obj_set_pos(id(sun_needle_dot), (int) lround(CX + CR * sin(a)) - 7, (int) lround(CY - CR * cos(a)) - 7);
+          lv_obj_set_style_bg_color(id(sun_needle_dot), lv_color_hex(up ? 0xFFCC00 : 0x607D8B), LV_PART_MAIN);
+          lv_obj_set_style_shadow_opa(id(sun_needle_dot), up ? LV_OPA_80 : LV_OPA_TRANSP, LV_PART_MAIN);
+
+          if (up) {
+            int x = X(az), y = Y(el);
+            lv_obj_set_pos(id(sun_dot), x - 11, y - 11);
+            lv_obj_clear_flag(id(sun_dot), LV_OBJ_FLAG_HIDDEN);
+            // travelled part of today's path, ending at the sun
+            int kk = (int) floor((ts - rise_ts) / (set_ts - rise_ts) * (NP - 1));
+            if (kk < 0) kk = 0;
+            if (kk > NP - 1) kk = NP - 1;
+            for (int k = 0; k <= kk; k++) p_done[k] = p_today[k];
+            p_done[kk + 1].x = x;
+            p_done[kk + 1].y = y;
+            lv_line_set_points(id(sun_path_done)->obj, p_done, kk + 2);
+            lv_obj_clear_flag(id(sun_path_done)->obj, LV_OBJ_FLAG_HIDDEN);
+            if (HY - y > 16) {
+              p_drop[0].x = x;
+              p_drop[0].y = y + 12;
+              p_drop[1].x = x;
+              p_drop[1].y = HY;
+              lv_line_set_points(id(sun_drop)->obj, p_drop, 2);
+              lv_obj_clear_flag(id(sun_drop)->obj, LV_OBJ_FLAG_HIDDEN);
+            } else {
+              lv_obj_add_flag(id(sun_drop)->obj, LV_OBJ_FLAG_HIDDEN);
+            }
+            lv_obj_add_flag(id(sun_lbl_below), LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_obj_add_flag(id(sun_dot), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(id(sun_path_done)->obj, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(id(sun_drop)->obj, LV_OBJ_FLAG_HIDDEN);
+            double nr = rise_ha, nn, ns;
+            if (ts > set_ha) { rise_set(days + 1, nr, nn, ns); nr = ha_t(nr, off_r); }
+            char tb[16];
+            fmt_time(nr, tb, sizeof(tb));
+            if (night_y < 0) {
+              snprintf(buf, sizeof(buf), "Sun below horizon, rises %s", tb);
+              lv_obj_set_width(id(sun_lbl_below), 500);
+              lv_obj_set_pos(id(sun_lbl_below), 10, 4);
+            } else {
+              snprintf(buf, sizeof(buf), "Sun below horizon\nRises %s", tb);
+              lv_obj_set_width(id(sun_lbl_below), 300);
+              lv_obj_set_pos(id(sun_lbl_below), night_x, night_y);
+            }
+            lv_label_set_text(id(sun_lbl_below), buf);
+            lv_obj_clear_flag(id(sun_lbl_below), LV_OBJ_FLAG_HIDDEN);
+          }
+
+          // ---- event times for the live countdown (update_sun_countdown, every second) ----
+          // Same next-event rule as the night message: today's sunrise before dawn, today's
+          // sunset while the sun is up, tomorrow's sunrise after sunset.
+          {
+            static int cd_days = -1;
+            static double next_rise = 0;
+            if (cd_days != days) {
+              cd_days = days;
+              double nn, ns;
+              rise_set(days + 1, next_rise, nn, ns);
+            }
+            id(sun_cd_rise) = rise_ha;
+            id(sun_cd_set) = set_ha;
+            id(sun_cd_rise_next) = ha_t(next_rise, off_r);
+          }
+
+
+
+sensor:
+  - platform: wifi_signal
+    name: wifi signal
+    update_interval: 60s
+    entity_category: diagnostic
+
+  - platform: homeassistant
+    entity_id: ${ha_indoor_temp}
+    id: ha_indoor_temperature
+    on_value:
+      - lvgl.label.update:
+          id: indoor_temperature
+          text:
+            format: "%d"
+            args: ['(int)round(x)']
+
+  # Ecowitt GW1100B rain (HA reports inches / in/h)
+  - platform: homeassistant
+    entity_id: ${ha_event_rain}
+    id: ha_event_rain
+    on_value:
+      then:
+        - script.execute: update_rain_line
+
+  - platform: homeassistant
+    entity_id: ${ha_rain_rate}
+    id: ha_rain_rate
+    on_value:
+      then:
+        - script.execute: update_rain_line
+
+  - platform: homeassistant
+    entity_id: ${ha_indoor_humidity}
+    id: ha_indoor_humidity
+    on_value:
+      - lvgl.label.update:
+          id: indoor_humidity
+          text:
+            format: "%d"
+            args: ['(int)round(x)']
+
+  - platform: homeassistant
+    entity_id: ${ha_deck_temp}
+    id: ha_outdoor_temperature
+    on_value:
+      - lvgl.label.update:
+          id: outdoor_temperature
+          text:
+            format: "%d"
+            args: ['(int)round(x)']
+      - lvgl.label.update:
+          id: sun_deck_temp
+          text:
+            format: "Deck %d°"
+            args: ['(int)round(x)']
+      - script.execute: align_sun_deck
+
+  - platform: homeassistant
+    entity_id: ${ha_deck_humidity}
+    id: ha_otdoor_humidity
+    on_value:
+      - lvgl.label.update:
+          id: outdoor_humidity
+          text:
+            format: "%d"
+            args: ['(int)round(x)']
+
+  - platform: homeassistant
+    entity_id: ${ha_pressure}
+    id: ha_pressure
+    on_value:
+      - lvgl.label.update:
+          id: equivalent_pressure_num
+          text: !lambda |-
+            float inhg = x * 0.0295299830714;
+            char buf[20];
+            snprintf(buf, sizeof(buf), "%.2f", inhg);
+            return std::string(buf);
+
+  - platform: homeassistant
+    entity_id: ${ha_wind_speed}
+    id: ha_current_wind_speed
+    on_value:
+      - lvgl.label.update:
+          id: current_wind_speed
+          text:
+            format: "%d mph"
+            args: ['(int)round(x)']
+
+  # 5-day high/low only (no condition sensors here)
+  - platform: homeassistant
+    id: fc0_low
+    entity_id: ${ha_forecast_day_0_low}
+  - platform: homeassistant
+    id: fc0_high
+    entity_id: ${ha_forecast_day_0_high}
+  - platform: homeassistant
+    id: fc1_low
+    entity_id: ${ha_forecast_day_1_low}
+  - platform: homeassistant
+    id: fc1_high
+    entity_id: ${ha_forecast_day_1_high}
+  - platform: homeassistant
+    id: fc2_low
+    entity_id: ${ha_forecast_day_2_low}
+  - platform: homeassistant
+    id: fc2_high
+    entity_id: ${ha_forecast_day_2_high}
+  - platform: homeassistant
+    id: fc3_low
+    entity_id: ${ha_forecast_day_3_low}
+  - platform: homeassistant
+    id: fc3_high
+    entity_id: ${ha_forecast_day_3_high}
+  - platform: homeassistant
+    id: fc4_low
+    entity_id: ${ha_forecast_day_4_low}
+  - platform: homeassistant
+    id: fc4_high
+    entity_id: ${ha_forecast_day_4_high}
+  - platform: homeassistant
+    entity_id: ${ha_forecast_hour_0_wind_speed}
+    id: hour0_wind_speed
+  - platform: homeassistant
+    entity_id: ${ha_forecast_hour_1_wind_speed}
+    id: hour1_wind_speed
+  - platform: homeassistant
+    entity_id: ${ha_forecast_hour_2_wind_speed}
+    id: hour2_wind_speed
+  - platform: homeassistant
+    entity_id: ${ha_forecast_hour_3_wind_speed}
+    id: hour3_wind_speed
+
+text_sensor:
+  - platform: homeassistant
+    entity_id: ${ha_wind_direction}
+    id: ha_current_wind_direction
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: current_wind_direction
+            text:
+              format: "%s"
+              args: ['x.c_str()']
+
+  - platform: homeassistant
+    entity_id: ${ha_condition}
+    id: ha_current_condition
+    on_value:
+      then:
+        # Animated condition icon: pick the matching animation 
+        - lambda: |-
+            std::string cond = x;
+            for (char &c : cond) c = tolower(c);
+            static const char *known[] = {"sunny","clear-night","partlycloudy","cloudy","rainy","pouring",
+              "lightning","lightning-rainy","snowy","snowy-rainy","fog","windy","hail","exceptional"};
+            bool ok = false;
+            for (auto k : known) if (cond == k) { ok = true; break; }
+            if (!ok) {
+              // fallback for non-standard strings (same keyword logic as the old font icon)
+              if (cond.find("fog") != std::string::npos) cond = "fog";
+              else if (cond.find("sunny") != std::string::npos || cond.find("clear") != std::string::npos) cond = "sunny";
+              else if (cond.find("partly") != std::string::npos) cond = "partlycloudy";
+              else if (cond.find("storm") != std::string::npos || cond.find("thunder") != std::string::npos) cond = "lightning-rainy";
+              else if (cond.find("rain") != std::string::npos || cond.find("shower") != std::string::npos) cond = "rainy";
+              else if (cond.find("snow") != std::string::npos) cond = "snowy";
+              else cond = "cloudy";
+            }
+            id(weather_cond) = cond;
+        - lambda: |-
+            std::string c = id(weather_cond);
+            if (c == "pouring") c = "rainy";
+            struct E { const char *n; lv_obj_t *o; };
+            E all[] = {
+              {"sunny", id(ai_sunny)},
+              {"clear-night", id(ai_clear_night)},
+              {"partlycloudy", id(ai_partlycloudy)},
+              {"cloudy", id(ai_cloudy)},
+              {"rainy", id(ai_rainy)},
+              {"lightning", id(ai_lightning)},
+              {"lightning-rainy", id(ai_lightning_rainy)},
+              {"snowy", id(ai_snowy)},
+              {"snowy-rainy", id(ai_snowy_rainy)},
+              {"fog", id(ai_fog)},
+              {"windy", id(ai_windy)},
+              {"hail", id(ai_hail)},
+              {"exceptional", id(ai_exceptional)},
+            };
+            bool found = false;
+            for (auto &e : all) if (c == e.n) found = true;
+            if (!found) c = "cloudy";
+            for (auto &e : all) {
+              if (c == e.n) lv_obj_clear_flag(e.o, LV_OBJ_FLAG_HIDDEN);
+              else lv_obj_add_flag(e.o, LV_OBJ_FLAG_HIDDEN);
+            }
+
+  # ===== Condition sensors (only place they should exist) =====
+
+  - platform: homeassistant
+    id: fc0_cond
+    entity_id: ${ha_forecast_day_0_condition}
+    on_value:
+      then:
+        - script.execute: update_forecast_rows
+
+  - platform: homeassistant
+    id: fc1_cond
+    entity_id: ${ha_forecast_day_1_condition}
+    on_value:
+      then:
+        - script.execute: update_forecast_rows
+
+  - platform: homeassistant
+    id: fc2_cond
+    entity_id: ${ha_forecast_day_2_condition}
+    on_value:
+      then:
+        - script.execute: update_forecast_rows
+
+  - platform: homeassistant
+    id: fc3_cond
+    entity_id: ${ha_forecast_day_3_condition}
+    on_value:
+      then:
+        - script.execute: update_forecast_rows
+
+  - platform: homeassistant
+    id: fc4_cond
+    entity_id: ${ha_forecast_day_4_condition}
+    on_value:
+      then:
+        - script.execute: update_forecast_rows
+
+  - platform: homeassistant
+    entity_id: ${ha_forecast_hour_0_wind_direction}
+    id: hour0_wind_dir
+  - platform: homeassistant
+    entity_id: ${ha_forecast_hour_1_wind_direction}
+    id: hour1_wind_dir
+  - platform: homeassistant
+    entity_id: ${ha_forecast_hour_2_wind_direction}
+    id: hour2_wind_dir
+  - platform: homeassistant
+    entity_id: ${ha_forecast_hour_3_wind_direction}
+    id: hour3_wind_dir
+
+  - platform: homeassistant
+    entity_id: ${ha_sun}
+    id: ha_sun_state
+    on_value:
+      then:
+        - script.execute: update_sun_panel
+        - script.execute: update_hourly_panels
+
+  - platform: homeassistant
+    entity_id: ${ha_sun}
+    id: ha_next_rising
+    attribute: next_rising
+    on_value:
+      then:
+        - script.execute: update_sun_panel
+        - script.execute: update_hourly_panels
+
+  - platform: homeassistant
+    entity_id: ${ha_sun}
+    id: ha_next_setting
+    attribute: next_setting
+    on_value:
+      then:
+        - script.execute: update_sun_panel
+        - script.execute: update_hourly_panels
+
+  - platform: homeassistant
+    entity_id: ${ha_sun}
+    id: ha_next_noon
+    attribute: next_noon
+    on_value:
+      then:
+        - script.execute: update_sun_panel
+
+  - platform: homeassistant
+    entity_id: ${ha_moon}
+    id: ha_moon
+    on_value:
+      then:
+        - script.execute: update_sun_panel
+
+  # HA template sensor: daily precip chance, "p0|p1|p2|p3|p4"
+  - platform: homeassistant
+    entity_id: ${ha_daily_precip}
+    id: ha_daily_precip
+    on_value:
+      then:
+        - script.execute: update_daily_precip
+
+  # HA template sensor (see ha-templates-rotating-v1.yaml): next 4 hours
+  - platform: homeassistant
+    entity_id: ${ha_hourly_4h}
+    id: ha_hourly4
+    on_value:
+      then:
+        - script.execute: update_hourly_panels
+
+switch:
+  - platform: gpio
+    name: "Backlight"
+    pin:
+      ch422g: io_ex
+      number: 2
+    restore_mode: ALWAYS_ON
+    icon: mdi:lightbulb
+
+# ===== Animated weather icons (Meteocons fill, 80x80, 10 frames, RGB565 + chroma key) =====
+image:
+  # Boot splash logo (full color)
+  - platform: file
+    id: img_splash
+    file: "images/kbw_splash_800x480.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_clear_night_00
+    file: "fonts/weather_frames/clear-night_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_clear_night_01
+    file: "fonts/weather_frames/clear-night_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_clear_night_02
+    file: "fonts/weather_frames/clear-night_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_clear_night_03
+    file: "fonts/weather_frames/clear-night_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_clear_night_04
+    file: "fonts/weather_frames/clear-night_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_clear_night_05
+    file: "fonts/weather_frames/clear-night_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_clear_night_06
+    file: "fonts/weather_frames/clear-night_06.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_clear_night_07
+    file: "fonts/weather_frames/clear-night_07.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_cloudy_00
+    file: "fonts/weather_frames/cloudy_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_cloudy_01
+    file: "fonts/weather_frames/cloudy_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_cloudy_02
+    file: "fonts/weather_frames/cloudy_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_cloudy_03
+    file: "fonts/weather_frames/cloudy_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_cloudy_04
+    file: "fonts/weather_frames/cloudy_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_cloudy_05
+    file: "fonts/weather_frames/cloudy_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_cloudy_06
+    file: "fonts/weather_frames/cloudy_06.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_cloudy_07
+    file: "fonts/weather_frames/cloudy_07.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_exceptional_00
+    file: "fonts/weather_frames/exceptional_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_exceptional_01
+    file: "fonts/weather_frames/exceptional_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_exceptional_02
+    file: "fonts/weather_frames/exceptional_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_exceptional_03
+    file: "fonts/weather_frames/exceptional_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_exceptional_04
+    file: "fonts/weather_frames/exceptional_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_exceptional_05
+    file: "fonts/weather_frames/exceptional_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_exceptional_06
+    file: "fonts/weather_frames/exceptional_06.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_exceptional_07
+    file: "fonts/weather_frames/exceptional_07.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_fog_00
+    file: "fonts/weather_frames/fog_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_fog_01
+    file: "fonts/weather_frames/fog_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_fog_02
+    file: "fonts/weather_frames/fog_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_fog_03
+    file: "fonts/weather_frames/fog_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_fog_04
+    file: "fonts/weather_frames/fog_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_fog_05
+    file: "fonts/weather_frames/fog_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_fog_06
+    file: "fonts/weather_frames/fog_06.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_fog_07
+    file: "fonts/weather_frames/fog_07.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_hail_00
+    file: "fonts/weather_frames/hail_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_hail_01
+    file: "fonts/weather_frames/hail_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_hail_02
+    file: "fonts/weather_frames/hail_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_hail_03
+    file: "fonts/weather_frames/hail_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_hail_04
+    file: "fonts/weather_frames/hail_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_hail_05
+    file: "fonts/weather_frames/hail_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_hail_06
+    file: "fonts/weather_frames/hail_06.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_hail_07
+    file: "fonts/weather_frames/hail_07.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_rainy_00
+    file: "fonts/weather_frames/lightning-rainy_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_rainy_01
+    file: "fonts/weather_frames/lightning-rainy_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_rainy_02
+    file: "fonts/weather_frames/lightning-rainy_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_rainy_03
+    file: "fonts/weather_frames/lightning-rainy_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_rainy_04
+    file: "fonts/weather_frames/lightning-rainy_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_rainy_05
+    file: "fonts/weather_frames/lightning-rainy_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_rainy_06
+    file: "fonts/weather_frames/lightning-rainy_06.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_rainy_07
+    file: "fonts/weather_frames/lightning-rainy_07.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_00
+    file: "fonts/weather_frames/lightning_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_01
+    file: "fonts/weather_frames/lightning_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_02
+    file: "fonts/weather_frames/lightning_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_03
+    file: "fonts/weather_frames/lightning_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_04
+    file: "fonts/weather_frames/lightning_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_lightning_05
+    file: "fonts/weather_frames/lightning_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_partlycloudy_00
+    file: "fonts/weather_frames/partlycloudy_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_partlycloudy_01
+    file: "fonts/weather_frames/partlycloudy_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_partlycloudy_02
+    file: "fonts/weather_frames/partlycloudy_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_partlycloudy_03
+    file: "fonts/weather_frames/partlycloudy_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_partlycloudy_04
+    file: "fonts/weather_frames/partlycloudy_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_partlycloudy_05
+    file: "fonts/weather_frames/partlycloudy_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_partlycloudy_06
+    file: "fonts/weather_frames/partlycloudy_06.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_partlycloudy_07
+    file: "fonts/weather_frames/partlycloudy_07.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_rainy_00
+    file: "fonts/weather_frames/rainy_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_rainy_01
+    file: "fonts/weather_frames/rainy_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_rainy_02
+    file: "fonts/weather_frames/rainy_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_rainy_03
+    file: "fonts/weather_frames/rainy_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_rainy_04
+    file: "fonts/weather_frames/rainy_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_rainy_05
+    file: "fonts/weather_frames/rainy_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_rainy_06
+    file: "fonts/weather_frames/rainy_06.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_rainy_07
+    file: "fonts/weather_frames/rainy_07.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_rainy_00
+    file: "fonts/weather_frames/snowy-rainy_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_rainy_01
+    file: "fonts/weather_frames/snowy-rainy_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_rainy_02
+    file: "fonts/weather_frames/snowy-rainy_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_rainy_03
+    file: "fonts/weather_frames/snowy-rainy_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_rainy_04
+    file: "fonts/weather_frames/snowy-rainy_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_rainy_05
+    file: "fonts/weather_frames/snowy-rainy_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_rainy_06
+    file: "fonts/weather_frames/snowy-rainy_06.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_rainy_07
+    file: "fonts/weather_frames/snowy-rainy_07.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_00
+    file: "fonts/weather_frames/snowy_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_01
+    file: "fonts/weather_frames/snowy_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_02
+    file: "fonts/weather_frames/snowy_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_03
+    file: "fonts/weather_frames/snowy_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_04
+    file: "fonts/weather_frames/snowy_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_05
+    file: "fonts/weather_frames/snowy_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_06
+    file: "fonts/weather_frames/snowy_06.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_snowy_07
+    file: "fonts/weather_frames/snowy_07.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_sunny_00
+    file: "fonts/weather_frames/sunny_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_sunny_01
+    file: "fonts/weather_frames/sunny_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_sunny_02
+    file: "fonts/weather_frames/sunny_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_sunny_03
+    file: "fonts/weather_frames/sunny_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_sunny_04
+    file: "fonts/weather_frames/sunny_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_sunny_05
+    file: "fonts/weather_frames/sunny_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_sunny_06
+    file: "fonts/weather_frames/sunny_06.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_sunny_07
+    file: "fonts/weather_frames/sunny_07.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_windy_00
+    file: "fonts/weather_frames/windy_00.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_windy_01
+    file: "fonts/weather_frames/windy_01.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_windy_02
+    file: "fonts/weather_frames/windy_02.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_windy_03
+    file: "fonts/weather_frames/windy_03.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_windy_04
+    file: "fonts/weather_frames/windy_04.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_windy_05
+    file: "fonts/weather_frames/windy_05.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_windy_06
+    file: "fonts/weather_frames/windy_06.png"
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: wf_windy_07
+    file: "fonts/weather_frames/windy_07.png"
+    type: RGB565
+    transparency: opaque
+
+font:
+  - file: 'fonts/weathericons-regular-webfont.ttf'
+    id: weather_font
+    size: 100
+    bpp: 4
+    glyphs: [
+      "\uF00D", "\uF002", "\uF013", "\uF008", "\uF019",
+      "\uF01E", "\uF01B", "\uF014"
+    ]
+
+  - file: 'fonts/weathericons-regular-webfont.ttf'
+    id: weather_font_sm
+    size: 36
+    bpp: 4
+    glyphs: [
+      "\uF00D", "\uF002", "\uF013", "\uF008", "\uF019",
+      "\uF01E", "\uF01B", "\uF014",
+      "\uF02E", "\uF086"
+    ]
+
+  # Moon phase icons (MDI moon-new, moon-waxing-crescent, moon-first-quarter,
+  # moon-waxing-gibbous, moon-full, moon-waning-gibbous, moon-last-quarter, moon-waning-crescent)
+  - file: 'fonts/materialdesignicons-webfont.ttf'
+    id: moon_font
+    size: 64
+    bpp: 4
+    glyphs: [
+      "\U000F0F64", "\U000F0F67", "\U000F0F61", "\U000F0F68",
+      "\U000F0F62", "\U000F0F66", "\U000F0F63", "\U000F0F65"
+    ]
+
+  - file: 'fonts/materialdesignicons-webfont.ttf'
+    id: arrow_font
+    size: 30
+    bpp: 4
+    glyphs: [
+      "\U000F0043", "\U000F19B7", "\U000F005C", "\U000F19B4",
+      "\U000F0054", "\U000F19B0"
+    ]
+
+  - file: 'fonts/materialdesignicons-webfont.ttf'
+    id: mdi_42
+    size: 70
+    bpp: 4
+    glyphs: [
+      "\U000F0335", "\U000F0336", "\U000F06B5", "\U000F17D0"
+    ]
+
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: clock_font
+    size: 120
+    bpp: 4
+
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: small_font
+    size: 36
+    bpp: 4
+
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: outdoor_font
+    size: 100
+    bpp: 4
+
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: outdoor_font2
+    size: 72
+    bpp: 4
+
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: outdoor_font3
+    size: 24
+    bpp: 4
+
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: indoor_font
+    size: 72
+    bpp: 4
+
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: small_info_font
+    size: 24
+    bpp: 4
+
+  # Daily precip chance under the day name on the main-page 5-day rows
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: precip_font
+    size: 16
+    bpp: 4
+    glyphs: "0123456789%"
+
+  # Sun page captions / chart labels
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: sun_font
+    size: 18
+    bpp: 4
+    glyphs: " !%()+-.:/0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz\u00B0\u00D7"
+
+lvgl:
+  style_definitions:
+    - id: outdoor_style
+      text_font: outdoor_font
+      text_color: 0x00FF00
+    - id: outdoor_style2
+      text_font: outdoor_font2
+      text_color: 0x00FF00
+    - id: outdoor_style3
+      text_font: outdoor_font3
+      text_color: 0xAAAAAA
+    - id: indoor_style
+      text_font: indoor_font
+      text_color: 0xFFD700
+    - id: small_outdoor_style
+      text_font: small_info_font
+      text_color: 0x00FF00
+      translate_y: -8
+    - id: small_indoor_style
+      text_font: small_info_font
+      text_color: 0xFFD700
+      translate_y: -8
+    - id: mdi_style
+      text_font: mdi_42
+      text_color: 0x00FF00
+      translate_y: -8
+
+  pages:
+    # ===================== BOOT SPLASH =====================
+    - id: page_splash
+      bg_color: 0x001C43
+      scrollbar_mode: "OFF"
+      widgets:
+        - image:
+            src: img_splash
+            align: CENTER
+
+    # ===================== MAIN PAGE =====================
+    - id: page_main
+      bg_color: 0x111111
+      scrollbar_mode: "OFF"
+      on_load:
+        then:
+          - script.execute: update_forecast_rows
+          - script.execute: update_hourly_panels
+          - script.execute: update_sun_panel
+          - script.execute: show_fc_panel
+          - script.execute: update_rain_line
+      widgets:
+        - obj:
+            x: 0
+            y: 0
+            width: 390
+            height: 260
+            bg_color: 0x222222
+            border_width: 1
+            border_color: 0x555555
+
+        # ===== Rotating forecast box (15 s): 5-day / hourly / sun & moon =====
+        # Panel 1: compact 5-day (unchanged positions, now inside a transparent container)
+        - obj:
+            id: fc_panel_5day
+            x: 0
+            y: 0
+            width: 390
+            height: 260
+            bg_opa: TRANSP
+            border_width: 0
+            radius: 0
+            pad_all: 0
+            scrollbar_mode: "OFF"
+            widgets:
+              # Compact forecast day 0
+              - label:
+                  id: main_day0_name
+                  x: 8
+                  y: 16
+                  text: "Today"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_day0_icon
+                  x: 96
+                  y: 8
+                  text: "\uF013"
+                  text_font: weather_font_sm
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_day0_low
+                  x: 150
+                  y: 16
+                  text: "--°"
+                  text_font: small_info_font
+                  text_color: 0xAAAAAA
+              - bar:
+                  id: main_day0_bar
+                  x: 202
+                  y: 22
+                  width: 116
+                  height: 16
+                  min_value: 40
+                  max_value: 100
+                  value: 70
+                  bg_color: 0x333333
+                  indicator:
+                    bg_color: 0xFFAA00
+                    bg_grad_dir: NONE
+              - label:
+                  id: main_day0_high
+                  x: 328
+                  y: 16
+                  text: "--°"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_day0_pop
+                  x: 8
+                  y: 34
+                  text: ""
+                  text_font: precip_font
+                  text_color: 0x4FC3F7
+                  hidden: true
+
+              # Compact forecast day 1
+              - label:
+                  id: main_day1_name
+                  x: 8
+                  y: 64
+                  text: "---"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_day1_icon
+                  x: 96
+                  y: 56
+                  text: "\uF013"
+                  text_font: weather_font_sm
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_day1_low
+                  x: 150
+                  y: 64
+                  text: "--°"
+                  text_font: small_info_font
+                  text_color: 0xAAAAAA
+              - bar:
+                  id: main_day1_bar
+                  x: 202
+                  y: 70
+                  width: 116
+                  height: 16
+                  min_value: 40
+                  max_value: 100
+                  value: 70
+                  bg_color: 0x333333
+                  indicator:
+                    bg_color: 0xFFAA00
+                    bg_grad_dir: NONE
+              - label:
+                  id: main_day1_high
+                  x: 328
+                  y: 64
+                  text: "--°"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_day1_pop
+                  x: 8
+                  y: 82
+                  text: ""
+                  text_font: precip_font
+                  text_color: 0x4FC3F7
+                  hidden: true
+
+              # Compact forecast day 2
+              - label:
+                  id: main_day2_name
+                  x: 8
+                  y: 112
+                  text: "---"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_day2_icon
+                  x: 96
+                  y: 104
+                  text: "\uF013"
+                  text_font: weather_font_sm
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_day2_low
+                  x: 150
+                  y: 112
+                  text: "--°"
+                  text_font: small_info_font
+                  text_color: 0xAAAAAA
+              - bar:
+                  id: main_day2_bar
+                  x: 202
+                  y: 118
+                  width: 116
+                  height: 16
+                  min_value: 40
+                  max_value: 100
+                  value: 70
+                  bg_color: 0x333333
+                  indicator:
+                    bg_color: 0xFFAA00
+                    bg_grad_dir: NONE
+              - label:
+                  id: main_day2_high
+                  x: 328
+                  y: 112
+                  text: "--°"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_day2_pop
+                  x: 8
+                  y: 130
+                  text: ""
+                  text_font: precip_font
+                  text_color: 0x4FC3F7
+                  hidden: true
+
+              # Compact forecast day 3
+              - label:
+                  id: main_day3_name
+                  x: 8
+                  y: 160
+                  text: "---"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_day3_icon
+                  x: 96
+                  y: 152
+                  text: "\uF013"
+                  text_font: weather_font_sm
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_day3_low
+                  x: 150
+                  y: 160
+                  text: "--°"
+                  text_font: small_info_font
+                  text_color: 0xAAAAAA
+              - bar:
+                  id: main_day3_bar
+                  x: 202
+                  y: 166
+                  width: 116
+                  height: 16
+                  min_value: 40
+                  max_value: 100
+                  value: 70
+                  bg_color: 0x333333
+                  indicator:
+                    bg_color: 0xFFAA00
+                    bg_grad_dir: NONE
+              - label:
+                  id: main_day3_high
+                  x: 328
+                  y: 160
+                  text: "--°"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_day3_pop
+                  x: 8
+                  y: 178
+                  text: ""
+                  text_font: precip_font
+                  text_color: 0x4FC3F7
+                  hidden: true
+
+              # Compact forecast day 4
+              - label:
+                  id: main_day4_name
+                  x: 8
+                  y: 208
+                  text: "---"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_day4_icon
+                  x: 96
+                  y: 200
+                  text: "\uF013"
+                  text_font: weather_font_sm
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_day4_low
+                  x: 150
+                  y: 208
+                  text: "--°"
+                  text_font: small_info_font
+                  text_color: 0xAAAAAA
+              - bar:
+                  id: main_day4_bar
+                  x: 202
+                  y: 214
+                  width: 116
+                  height: 16
+                  min_value: 40
+                  max_value: 100
+                  value: 70
+                  bg_color: 0x333333
+                  indicator:
+                    bg_color: 0xFFAA00
+                    bg_grad_dir: NONE
+              - label:
+                  id: main_day4_high
+                  x: 328
+                  y: 208
+                  text: "--°"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_day4_pop
+                  x: 8
+                  y: 226
+                  text: ""
+                  text_font: precip_font
+                  text_color: 0x4FC3F7
+                  hidden: true
+
+        # Panel 2: next 4 hours
+        - obj:
+            id: fc_panel_hourly
+            x: 0
+            y: 0
+            width: 390
+            height: 260
+            bg_opa: TRANSP
+            border_width: 0
+            radius: 0
+            pad_all: 0
+            scrollbar_mode: "OFF"
+            hidden: true
+            widgets:
+              - label:
+                  x: 12
+                  y: 10
+                  text: "NEXT 4 HOURS"
+                  text_font: small_info_font
+                  text_color: 0x999999
+              - label:
+                  id: main_hr0_time
+                  x: 4
+                  y: 46
+                  width: 94
+                  text_align: CENTER
+                  text: "--"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_hr0_icon
+                  x: 4
+                  y: 82
+                  width: 94
+                  text_align: CENTER
+                  text: "\uF013"
+                  text_font: weather_font_sm
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_hr0_temp
+                  x: 4
+                  y: 132
+                  width: 94
+                  text_align: CENTER
+                  text: "--°"
+                  text_font: small_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_hr0_pop
+                  x: 4
+                  y: 186
+                  width: 94
+                  text_align: CENTER
+                  text: "--%"
+                  text_font: small_info_font
+                  text_color: 0x4FC3F7
+              - label:
+                  id: main_hr1_time
+                  x: 100
+                  y: 46
+                  width: 94
+                  text_align: CENTER
+                  text: "--"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_hr1_icon
+                  x: 100
+                  y: 82
+                  width: 94
+                  text_align: CENTER
+                  text: "\uF013"
+                  text_font: weather_font_sm
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_hr1_temp
+                  x: 100
+                  y: 132
+                  width: 94
+                  text_align: CENTER
+                  text: "--°"
+                  text_font: small_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_hr1_pop
+                  x: 100
+                  y: 186
+                  width: 94
+                  text_align: CENTER
+                  text: "--%"
+                  text_font: small_info_font
+                  text_color: 0x4FC3F7
+              - label:
+                  id: main_hr2_time
+                  x: 196
+                  y: 46
+                  width: 94
+                  text_align: CENTER
+                  text: "--"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_hr2_icon
+                  x: 196
+                  y: 82
+                  width: 94
+                  text_align: CENTER
+                  text: "\uF013"
+                  text_font: weather_font_sm
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_hr2_temp
+                  x: 196
+                  y: 132
+                  width: 94
+                  text_align: CENTER
+                  text: "--°"
+                  text_font: small_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_hr2_pop
+                  x: 196
+                  y: 186
+                  width: 94
+                  text_align: CENTER
+                  text: "--%"
+                  text_font: small_info_font
+                  text_color: 0x4FC3F7
+              - label:
+                  id: main_hr3_time
+                  x: 292
+                  y: 46
+                  width: 94
+                  text_align: CENTER
+                  text: "--"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_hr3_icon
+                  x: 292
+                  y: 82
+                  width: 94
+                  text_align: CENTER
+                  text: "\uF013"
+                  text_font: weather_font_sm
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_hr3_temp
+                  x: 292
+                  y: 132
+                  width: 94
+                  text_align: CENTER
+                  text: "--°"
+                  text_font: small_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_hr3_pop
+                  x: 292
+                  y: 186
+                  width: 94
+                  text_align: CENTER
+                  text: "--%"
+                  text_font: small_info_font
+                  text_color: 0x4FC3F7
+
+        # Panel 3: sun & moon
+        - obj:
+            id: fc_panel_sun
+            x: 0
+            y: 0
+            width: 390
+            height: 260
+            bg_opa: TRANSP
+            border_width: 0
+            radius: 0
+            pad_all: 0
+            scrollbar_mode: "OFF"
+            hidden: true
+            widgets:
+              - label:
+                  x: 12
+                  y: 10
+                  text: "SUN & MOON"
+                  text_font: small_info_font
+                  text_color: 0x999999
+              - label:
+                  x: 12
+                  y: 46
+                  text: "Sunrise"
+                  text_font: small_info_font
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_sun_rise
+                  x: 150
+                  y: 46
+                  text: "--:--"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  x: 12
+                  y: 84
+                  text: "Sunset"
+                  text_font: small_info_font
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_sun_set
+                  x: 150
+                  y: 84
+                  text: "--:--"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  x: 12
+                  y: 122
+                  text: "Solar noon"
+                  text_font: small_info_font
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_sun_noon
+                  x: 150
+                  y: 122
+                  text: "--:--"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  x: 12
+                  y: 160
+                  text: "Day length"
+                  text_font: small_info_font
+                  text_color: 0xAAAAAA
+              - label:
+                  id: main_sun_len
+                  x: 150
+                  y: 160
+                  text: "--:--"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: main_moon_icon
+                  x: 270
+                  y: 50
+                  width: 112
+                  text_align: CENTER
+                  text: ""
+                  text_font: moon_font
+                  text_color: 0xE0E0E0
+              - label:
+                  id: main_moon_name
+                  x: 0
+                  y: 206
+                  width: 390
+                  text_align: CENTER
+                  text: "Moon --"
+                  text_font: small_info_font
+                  text_color: 0xE0E0E0
+
+        - obj:
+            x: 400
+            y: 0
+            width: 390
+            height: 290
+            bg_color: 0x222222
+            border_width: 1
+            border_color: 0x00FF00
+
+        - label:
+            text: "OUTDOOR"
+            x: 410
+            y: 10
+            text_font: small_info_font
+            text_color: 0x00FF00
+
+        - label:
+            id: outdoor_temperature
+            x: 420
+            y: 40
+            text: "--"
+            styles: outdoor_style
+
+        - label:
+            id: equivalent_pressure_num
+            x: 525
+            y: 250
+            text: "--.--"
+            text_font: small_info_font
+            text_color: 0xFFFFFF
+
+        - label:
+            id: equivalent_pressure_arrow
+            x: 600
+            y: 248
+            text: "\U000F0054"
+            text_font: arrow_font
+            text_color: 0xFFFFFF
+
+        - label:
+            text: "Pressure"
+            x: 420
+            y: 250
+            styles: outdoor_style3
+
+        - label:
+            id: current_wind_speed
+            text: "--"
+            x: 550
+            y: 200
+            styles: outdoor_style3
+
+        - label:
+            text: "Wind"
+            x: 420
+            y: 200
+            styles: outdoor_style3
+
+        - label:
+            id: current_wind_direction
+            text: "--"
+            x: 485
+            y: 200
+            styles: outdoor_style3
+
+        - label:
+            text: ${tempscale}
+            x: 560
+            y: 70
+            styles: small_outdoor_style
+
+        - label:
+            id: outdoor_humidity
+            x: 650
+            y: 190
+            text: "--"
+            styles: outdoor_style2
+
+        - label:
+            text: ${humidityscale}
+            x: 750
+            y: 200
+            styles: small_outdoor_style
+
+        # Animated weather condition icons (one shown at a time)
+        - animimg:
+            id: ai_sunny
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_sunny_00, wf_sunny_01, wf_sunny_02, wf_sunny_03, wf_sunny_04, wf_sunny_05, wf_sunny_06, wf_sunny_07]
+            hidden: true
+        - animimg:
+            id: ai_clear_night
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_clear_night_00, wf_clear_night_01, wf_clear_night_02, wf_clear_night_03, wf_clear_night_04, wf_clear_night_05, wf_clear_night_06, wf_clear_night_07]
+            hidden: true
+        - animimg:
+            id: ai_partlycloudy
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_partlycloudy_00, wf_partlycloudy_01, wf_partlycloudy_02, wf_partlycloudy_03, wf_partlycloudy_04, wf_partlycloudy_05, wf_partlycloudy_06, wf_partlycloudy_07]
+            hidden: true
+        - animimg:
+            id: ai_cloudy
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_cloudy_00, wf_cloudy_01, wf_cloudy_02, wf_cloudy_03, wf_cloudy_04, wf_cloudy_05, wf_cloudy_06, wf_cloudy_07]
+            hidden: false
+        - animimg:
+            id: ai_rainy
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_rainy_00, wf_rainy_01, wf_rainy_02, wf_rainy_03, wf_rainy_04, wf_rainy_05, wf_rainy_06, wf_rainy_07]
+            hidden: true
+        - animimg:
+            id: ai_lightning
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_lightning_00, wf_lightning_01, wf_lightning_02, wf_lightning_03, wf_lightning_04, wf_lightning_05]
+            hidden: true
+        - animimg:
+            id: ai_lightning_rainy
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_lightning_rainy_00, wf_lightning_rainy_01, wf_lightning_rainy_02, wf_lightning_rainy_03, wf_lightning_rainy_04, wf_lightning_rainy_05, wf_lightning_rainy_06, wf_lightning_rainy_07]
+            hidden: true
+        - animimg:
+            id: ai_snowy
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_snowy_00, wf_snowy_01, wf_snowy_02, wf_snowy_03, wf_snowy_04, wf_snowy_05, wf_snowy_06, wf_snowy_07]
+            hidden: true
+        - animimg:
+            id: ai_snowy_rainy
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_snowy_rainy_00, wf_snowy_rainy_01, wf_snowy_rainy_02, wf_snowy_rainy_03, wf_snowy_rainy_04, wf_snowy_rainy_05, wf_snowy_rainy_06, wf_snowy_rainy_07]
+            hidden: true
+        - animimg:
+            id: ai_fog
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_fog_00, wf_fog_01, wf_fog_02, wf_fog_03, wf_fog_04, wf_fog_05, wf_fog_06, wf_fog_07]
+            hidden: true
+        - animimg:
+            id: ai_windy
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_windy_00, wf_windy_01, wf_windy_02, wf_windy_03, wf_windy_04, wf_windy_05, wf_windy_06, wf_windy_07]
+            hidden: true
+        - animimg:
+            id: ai_hail
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_hail_00, wf_hail_01, wf_hail_02, wf_hail_03, wf_hail_04, wf_hail_05, wf_hail_06, wf_hail_07]
+            hidden: true
+        - animimg:
+            id: ai_exceptional
+            x: 615
+            y: 20
+            transform_scale: 1.7
+            transform_pivot_x: 0
+            transform_pivot_y: 0
+            duration: 1000ms
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            src: [wf_exceptional_00, wf_exceptional_01, wf_exceptional_02, wf_exceptional_03, wf_exceptional_04, wf_exceptional_05, wf_exceptional_06, wf_exceptional_07]
+            hidden: true
+
+        - label:
+            id: lbl_time
+            x: 20
+            y: 300
+            width: 380
+            text_align: LEFT
+            text_font: clock_font
+            text_color: 0x999999
+            text: "--:--"
+
+        - label:
+            id: lbl_ampm
+            x: 335
+            y: 375
+            text_font: small_font
+            text_color: 0x999999
+            text: "AM"
+            text_align: LEFT
+
+        - label:
+            id: lbl_date
+            x: 35
+            y: 265
+            width: 360
+            text_align: LEFT
+            text_font: small_font
+            text_color: 0x999999
+            text: "--- -- ---"
+
+        - obj:
+            x: 400
+            y: 300
+            width: 390
+            height: 145
+            bg_color: 0x222222
+            border_width: 1
+            border_color: 0xFFD700
+
+        - label:
+            text: "INDOOR"
+            x: 410
+            y: 310
+            text_font: small_info_font
+            text_color: 0xFFD700
+
+        - label:
+            id: indoor_temperature
+            x: 460
+            y: 340
+            text: "--"
+            styles: indoor_style
+
+        - label:
+            text: ${tempscale}
+            x: 550
+            y: 360
+            styles: small_indoor_style
+
+        - label:
+            id: indoor_humidity
+            x: 650
+            y: 340
+            text: "--"
+            styles: indoor_style
+
+        - label:
+            text: ${humidityscale}
+            x: 750
+            y: 360
+            styles: small_indoor_style
+
+        # Rain line (hidden unless event rain > 0), where the old sunrise/sunset line was
+        - label:
+            id: rain_line
+            x: 400
+            y: 450
+            width: 390
+            text_align: CENTER
+            text_font: small_info_font
+            text_color: 0x4FC3F7
+            text: ""
+            hidden: true
+
+        - button:
+            x: 40
+            y: 430
+            width: 200
+            height: 40
+            bg_color: 0x333333
+            radius: 8
+            on_click:
+              then:
+                - lvgl.page.show: page_sun
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Sun"
+                  text_font: small_info_font
+                  text_color: 0xFFFFFF
+
+    # ===================== SUN PAGE =====================
+    # Sky chart (x = azimuth NE..NW, y = elevation) with today's path, Jun 21 / Dec 21 paths,
+    # and the current sun position; all computed on the device (NOAA equations).
+    - id: page_sun
+      bg_color: 0x111111
+      scrollbar_mode: "OFF"
+      on_load:
+        then:
+          - script.execute: update_sun_page
+          - script.execute: update_sun_countdown
+      widgets:
+        - label:
+            text: "SUN POSITION"
+            x: 20
+            y: 15
+            text_font: small_info_font
+            text_color: 0xAAAAAA
+
+        - label:
+            id: sun_header_time
+            align: TOP_RIGHT
+            x: -20
+            y: 8
+            text: "--:--"
+            text_font: small_font
+            text_color: 0xFFFFFF
+
+        # Deck temperature, kept just left of the time (re-aligned when either changes)
+        - label:
+            id: sun_deck_temp
+            align: TOP_RIGHT
+            x: -190
+            y: 14
+            text: "Deck --°"
+            text_font: small_font
+            text_color: 0xE0E0E0
+
+        - obj:
+            id: sun_chart
+            x: 10
+            y: 50
+            width: 520
+            height: 355
+            bg_color: 0x14233D
+            bg_grad_color: 0x222222
+            bg_grad_dir: VER
+            border_width: 1
+            border_color: 0x555555
+            pad_all: 0
+            scrollbar_mode: "OFF"
+            scrollable: false
+            widgets:
+              - line:
+                  points: [{x: 44, y: 234}, {x: 505, y: 234}]
+                  line_color: 0x34404F
+                  line_width: 1
+                  line_dash_width: 4
+                  line_dash_gap: 5
+              - label:
+                  x: 4
+                  y: 224
+                  text: "15\u00B0"
+                  text_font: sun_font
+                  text_color: 0x7A8899
+              - line:
+                  points: [{x: 44, y: 183}, {x: 505, y: 183}]
+                  line_color: 0x34404F
+                  line_width: 1
+                  line_dash_width: 4
+                  line_dash_gap: 5
+              - label:
+                  x: 4
+                  y: 173
+                  text: "30\u00B0"
+                  text_font: sun_font
+                  text_color: 0x7A8899
+              - line:
+                  points: [{x: 44, y: 132}, {x: 505, y: 132}]
+                  line_color: 0x34404F
+                  line_width: 1
+                  line_dash_width: 4
+                  line_dash_gap: 5
+              - label:
+                  x: 4
+                  y: 122
+                  text: "45\u00B0"
+                  text_font: sun_font
+                  text_color: 0x7A8899
+              - line:
+                  points: [{x: 44, y: 81}, {x: 505, y: 81}]
+                  line_color: 0x34404F
+                  line_width: 1
+                  line_dash_width: 4
+                  line_dash_gap: 5
+              - label:
+                  x: 4
+                  y: 71
+                  text: "60\u00B0"
+                  text_font: sun_font
+                  text_color: 0x7A8899
+              - line:
+                  points: [{x: 274, y: 36}, {x: 274, y: 285}]
+                  line_color: 0x34404F
+                  line_width: 1
+                  line_dash_width: 4
+                  line_dash_gap: 5
+              - line:
+                  points: [{x: 44, y: 285}, {x: 44, y: 291}]
+                  line_color: 0x888888
+                  line_width: 2
+              - label:
+                  x: 24
+                  y: 293
+                  width: 40
+                  text_align: CENTER
+                  text: "NE"
+                  text_font: sun_font
+                  text_color: 0xAAAAAA
+              - line:
+                  points: [{x: 121, y: 285}, {x: 121, y: 291}]
+                  line_color: 0x888888
+                  line_width: 2
+              - label:
+                  x: 101
+                  y: 293
+                  width: 40
+                  text_align: CENTER
+                  text: "E"
+                  text_font: sun_font
+                  text_color: 0xAAAAAA
+              - line:
+                  points: [{x: 198, y: 285}, {x: 198, y: 291}]
+                  line_color: 0x888888
+                  line_width: 2
+              - label:
+                  x: 178
+                  y: 293
+                  width: 40
+                  text_align: CENTER
+                  text: "SE"
+                  text_font: sun_font
+                  text_color: 0xAAAAAA
+              - line:
+                  points: [{x: 274, y: 285}, {x: 274, y: 291}]
+                  line_color: 0x888888
+                  line_width: 2
+              - label:
+                  x: 254
+                  y: 293
+                  width: 40
+                  text_align: CENTER
+                  text: "S"
+                  text_font: sun_font
+                  text_color: 0xAAAAAA
+              - line:
+                  points: [{x: 351, y: 285}, {x: 351, y: 291}]
+                  line_color: 0x888888
+                  line_width: 2
+              - label:
+                  x: 331
+                  y: 293
+                  width: 40
+                  text_align: CENTER
+                  text: "SW"
+                  text_font: sun_font
+                  text_color: 0xAAAAAA
+              - line:
+                  points: [{x: 428, y: 285}, {x: 428, y: 291}]
+                  line_color: 0x888888
+                  line_width: 2
+              - label:
+                  x: 408
+                  y: 293
+                  width: 40
+                  text_align: CENTER
+                  text: "W"
+                  text_font: sun_font
+                  text_color: 0xAAAAAA
+              - line:
+                  points: [{x: 505, y: 285}, {x: 505, y: 291}]
+                  line_color: 0x888888
+                  line_width: 2
+              - label:
+                  x: 485
+                  y: 293
+                  width: 40
+                  text_align: CENTER
+                  text: "NW"
+                  text_font: sun_font
+                  text_color: 0xAAAAAA
+              - line:
+                  points: [{x: 40, y: 285}, {x: 509, y: 285}]
+                  line_color: 0x888888
+                  line_width: 2
+              - line:
+                  id: sun_path_summer
+                  points: [{x: 0, y: 0}, {x: 1, y: 0}]
+                  line_color: 0x5E4C1E
+                  line_width: 2
+                  line_rounded: true
+              - line:
+                  id: sun_path_winter
+                  points: [{x: 0, y: 0}, {x: 1, y: 0}]
+                  line_color: 0x30537A
+                  line_width: 2
+                  line_rounded: true
+              - label:
+                  id: sun_lbl_summer
+                  x: 0
+                  y: 0
+                  text: "Jun 21"
+                  text_font: sun_font
+                  text_color: 0x6B5C32
+              - label:
+                  id: sun_lbl_winter
+                  x: 0
+                  y: 0
+                  text: "Dec 21"
+                  text_font: sun_font
+                  text_color: 0x48668A
+              - line:
+                  id: sun_path_today
+                  points: [{x: 0, y: 0}, {x: 1, y: 0}]
+                  line_color: 0x8C6D1F
+                  line_width: 3
+                  line_rounded: true
+              - line:
+                  id: sun_path_done
+                  points: [{x: 0, y: 0}, {x: 1, y: 0}]
+                  line_color: 0xFFCC00
+                  line_width: 4
+                  line_rounded: true
+              - line:
+                  id: sun_drop
+                  points: [{x: 0, y: 0}, {x: 0, y: 1}]
+                  line_color: 0xFFCC00
+                  line_width: 1
+                  line_dash_width: 4
+                  line_dash_gap: 5
+                  line_opa: 60%
+              - label:
+                  id: sun_lbl_apex
+                  x: 0
+                  y: 0
+                  width: 240
+                  text_align: CENTER
+                  text: ""
+                  text_font: sun_font
+                  text_color: 0xFFCC00
+              - label:
+                  id: sun_lbl_rise
+                  x: 0
+                  y: 317
+                  width: 110
+                  text_align: LEFT
+                  text: ""
+                  text_font: sun_font
+                  text_color: 0xFFAA00
+              - label:
+                  id: sun_lbl_set
+                  x: 0
+                  y: 317
+                  width: 110
+                  text_align: RIGHT
+                  text: ""
+                  text_font: sun_font
+                  text_color: 0xFFAA00
+              - label:
+                  id: sun_lbl_below
+                  x: 10
+                  y: 4
+                  width: 500
+                  text_align: CENTER
+                  text: "Sun below horizon"
+                  text_font: small_info_font
+                  text_color: 0x90A4AE
+                  hidden: true
+              - obj:
+                  id: sun_dot
+                  x: 0
+                  y: 0
+                  width: 22
+                  height: 22
+                  radius: 11
+                  bg_color: 0xFFD54F
+                  border_width: 0
+                  shadow_width: 26
+                  shadow_spread: 4
+                  shadow_color: 0xFFAA00
+                  shadow_opa: 80%
+                  pad_all: 0
+                  hidden: true
+
+        - obj:
+            id: sun_box
+            x: 540
+            y: 50
+            width: 250
+            height: 355
+            bg_color: 0x222222
+            border_width: 1
+            border_color: 0x555555
+            pad_all: 0
+            scrollbar_mode: "OFF"
+            scrollable: false
+            widgets:
+              - label:
+                  x: 12
+                  y: 8
+                  text: "ELEVATION"
+                  text_font: sun_font
+                  text_color: 0xAAAAAA
+              - label:
+                  id: sun_el_val
+                  x: 12
+                  y: 28
+                  text: "--"
+                  text_font: small_font
+                  text_color: 0xFFCC00
+              - label:
+                  x: 12
+                  y: 76
+                  text: "AZIMUTH"
+                  text_font: sun_font
+                  text_color: 0xAAAAAA
+              - label:
+                  id: sun_az_val
+                  x: 12
+                  y: 96
+                  text: "--"
+                  text_font: small_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: sun_phase
+                  x: 12
+                  y: 142
+                  text: ""
+                  text_font: sun_font
+                  text_color: 0xFFAA00
+              - obj:
+                  x: 75
+                  y: 185
+                  width: 100
+                  height: 100
+                  radius: 50
+                  bg_color: 0x1A1A1A
+                  border_width: 2
+                  border_color: 0x555555
+                  pad_all: 0
+                  scrollbar_mode: "OFF"
+              - label:
+                  x: 115
+                  y: 162
+                  width: 20
+                  text_align: CENTER
+                  text: "N"
+                  text_font: sun_font
+                  text_color: 0xFFFFFF
+              - label:
+                  x: 179
+                  y: 225
+                  width: 20
+                  text_align: CENTER
+                  text: "E"
+                  text_font: sun_font
+                  text_color: 0xAAAAAA
+              - label:
+                  x: 115
+                  y: 288
+                  width: 20
+                  text_align: CENTER
+                  text: "S"
+                  text_font: sun_font
+                  text_color: 0xAAAAAA
+              - label:
+                  x: 51
+                  y: 225
+                  width: 20
+                  text_align: CENTER
+                  text: "W"
+                  text_font: sun_font
+                  text_color: 0xAAAAAA
+              - line:
+                  id: sun_ring_day
+                  points: [{x: 0, y: 0}, {x: 1, y: 0}]
+                  line_color: 0xFFAA00
+                  line_width: 5
+                  line_rounded: true
+                  line_opa: 70%
+              - line:
+                  id: sun_needle
+                  points: [{x: 125, y: 235}, {x: 125, y: 234}]
+                  line_color: 0xFFCC00
+                  line_width: 3
+                  line_rounded: true
+              - obj:
+                  x: 121
+                  y: 231
+                  width: 8
+                  height: 8
+                  radius: 4
+                  bg_color: 0x888888
+                  border_width: 0
+                  pad_all: 0
+              - obj:
+                  id: sun_needle_dot
+                  x: 118
+                  y: 178
+                  width: 14
+                  height: 14
+                  radius: 7
+                  bg_color: 0xFFCC00
+                  border_width: 0
+                  shadow_width: 14
+                  shadow_spread: 2
+                  shadow_color: 0xFFAA00
+                  shadow_opa: 80%
+                  pad_all: 0
+              - label:
+                  id: sun_shadow
+                  x: 12
+                  y: 306
+                  text: "Shadow  --"
+                  text_font: sun_font
+                  text_color: 0xFFFFFF
+              - label:
+                  id: sun_daylen
+                  x: 12
+                  y: 328
+                  text: "Day length  --"
+                  text_font: sun_font
+                  text_color: 0xFFFFFF
+
+        - button:
+            x: 10
+            y: 420
+            width: 180
+            height: 45
+            bg_color: 0x333333
+            radius: 8
+            on_click:
+              then:
+                - lvgl.page.show: page_main
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Home"
+                  text_font: small_font
+                  text_color: 0xFFFFFF
+
+        - button:
+            x: 205
+            y: 420
+            width: 180
+            height: 45
+            bg_color: 0x2A5A8A
+            radius: 8
+            on_click:
+              then:
+                - lvgl.page.show: page_hourly
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Winds"
+                  text_font: small_font
+                  text_color: 0xFFFFFF
+
+        # countdown to the next sunrise / sunset, in the button row right of Winds
+        - obj:
+            x: 395
+            y: 420
+            width: 395
+            height: 45
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            scrollbar_mode: "OFF"
+            scrollable: false
+            widgets:
+              - label:
+                  id: sun_countdown
+                  align: CENTER
+                  hidden: true
+                  text: ""
+                  text_font: small_font
+                  text_color: 0xFFAA00
+
+    # ===================== HOURLY WINDS PAGE =====================
+    - id: page_hourly
+      bg_color: 0x111111
+      scrollbar_mode: "OFF"
+      on_load:
+        then:
+          - script.execute: update_hourly_winds
+      widgets:
+        - label:
+            text: "NEXT 4 HOURS - WIND"
+            x: 20
+            y: 15
+            text_font: small_info_font
+            text_color: 0xAAAAAA
+
+        - label:
+            id: hourly_header_time
+            align: TOP_RIGHT
+            x: -20
+            y: 15
+            text: "--:--"
+            text_font: small_font
+            text_color: 0xFFFFFF
+
+        - label:
+            id: hour0_label
+            x: 40
+            y: 80
+            text: "Now"
+            text_font: small_font
+            text_color: 0xFFFFFF
+        - label:
+            id: hour0_dir
+            x: 220
+            y: 80
+            text: "--"
+            text_font: small_font
+            text_color: 0x4FC3F7
+        - label:
+            id: hour0_spd
+            x: 420
+            y: 80
+            text: "-- mph"
+            text_font: small_font
+            text_color: 0xFFFFFF
+
+        - label:
+            id: hour1_label
+            x: 40
+            y: 150
+            text: "--"
+            text_font: small_font
+            text_color: 0xFFFFFF
+        - label:
+            id: hour1_dir
+            x: 220
+            y: 150
+            text: "--"
+            text_font: small_font
+            text_color: 0x4FC3F7
+        - label:
+            id: hour1_spd
+            x: 420
+            y: 150
+            text: "-- mph"
+            text_font: small_font
+            text_color: 0xFFFFFF
+
+        - label:
+            id: hour2_label
+            x: 40
+            y: 220
+            text: "--"
+            text_font: small_font
+            text_color: 0xFFFFFF
+        - label:
+            id: hour2_dir
+            x: 220
+            y: 220
+            text: "--"
+            text_font: small_font
+            text_color: 0x4FC3F7
+        - label:
+            id: hour2_spd
+            x: 420
+            y: 220
+            text: "-- mph"
+            text_font: small_font
+            text_color: 0xFFFFFF
+
+        - label:
+            id: hour3_label
+            x: 40
+            y: 290
+            text: "--"
+            text_font: small_font
+            text_color: 0xFFFFFF
+        - label:
+            id: hour3_dir
+            x: 220
+            y: 290
+            text: "--"
+            text_font: small_font
+            text_color: 0x4FC3F7
+        - label:
+            id: hour3_spd
+            x: 420
+            y: 290
+            text: "-- mph"
+            text_font: small_font
+            text_color: 0xFFFFFF
+
+        - button:
+            x: 40
+            y: 420
+            width: 220
+            height: 45
+            bg_color: 0x333333
+            radius: 8
+            on_click:
+              then:
+                - lvgl.page.show: page_sun
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Back to Sun"
+                  text_font: small_font
+                  text_color: 0xFFFFFF

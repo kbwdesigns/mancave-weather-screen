@@ -1,0 +1,43 @@
+# ======================================================================
+# mancave-screen rotating forecast box - Home Assistant side (v1)
+#
+# This REPLACES the earlier suggestion of 16 separate
+# forecast_hour_N_time / _temp / _condition / _precip sensors.
+# You only need this ONE sensor. (Your existing forecast_hour_N_wind_speed
+# and forecast_hour_N_wind_direction sensors stay exactly as they are.)
+#
+# Creates:  sensor.mancave_hourly_4h
+# State (one entry per hour, up to 4, current hour first):
+#   epoch|label|temp|condition|precip%;epoch|label|...
+#   e.g. 1762776000|7 AM|43|clear-night|0;1762779600|8 AM|43|clear-night|0;...
+#   (~140 characters, well under HA's 255-character state limit)
+# The epoch lets the screen decide day vs night per hour using sun.sun.
+#
+# Paste the "- sensor:" block under your existing  template:  key in
+# configuration.yaml (or your templates file), then
+# Developer Tools > YAML > Template Entities (reload).
+# If you have no template: key yet, paste the whole thing including "template:".
+# ======================================================================
+template:
+  - sensor:
+      - name: "Mancave Hourly 4h"
+        unique_id: mancave_hourly_4h
+        icon: mdi:weather-partly-cloudy
+        availability: >
+          {% set f = state_attr('sensor.weather_hourly_forecast', 'forecast') %}
+          {{ f is not none and f is not string and f | count > 0 }}
+        state: >
+          {% set f = state_attr('sensor.weather_hourly_forecast', 'forecast') %}
+          {% set ns = namespace(out=[]) %}
+          {% for h in f if h.datetime is defined %}
+            {% set dt = h.datetime | as_datetime %}
+            {% if dt is not none and ns.out | count < 4 and dt + timedelta(hours=1) > now() %}
+              {% set ns.out = ns.out + [
+                   (as_timestamp(dt) | int) ~ '|' ~
+                   (dt | as_local).strftime('%-I %p') ~ '|' ~
+                   (h.temperature | float(0) | round(0) | int) ~ '|' ~
+                   (h.condition | default('unknown')) ~ '|' ~
+                   (h.precipitation_probability | float(0) | round(0) | int) ] %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.out | join(';') }}

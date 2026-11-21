@@ -1,0 +1,13 @@
+# Never commit real secrets
+secrets.yaml
+
+# ESPHome and PlatformIO build artifacts
+.esphome/
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Python / editor leftovers
+__pycache__/
+*.pyc
+.DS_Store
