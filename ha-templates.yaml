@@ -1,5 +1,5 @@
 # ======================================================================
-# mancave-screen rotating forecast box - Home Assistant side (v1)
+# Mancave weather screen rotating forecast box - Home Assistant side
 #
 # This REPLACES the earlier suggestion of 16 separate
 # forecast_hour_N_time / _temp / _condition / _precip sensors.

@@ -1,5 +1,5 @@
-# ESP32-S3-Touch-LCD-7
-# 16MB flash layout (already installed over USB with v6); Wi-Fi OTA is fine from here on
+# KBW Designs mancave weather screen
+# Waveshare ESP32-S3-Touch-LCD-7, 16MB flash layout (first install over USB, then Wi-Fi OTA)
 substitutions:
   # Your location for the Sun page sun-path math (decimal degrees, west longitude negative)
   latitude: "0.0"
@@ -1683,7 +1683,7 @@ text_sensor:
       then:
         - script.execute: update_daily_precip
 
-  # HA template sensor (see ha-templates-rotating-v1.yaml): next 4 hours
+  # HA template sensor (see ha-templates.yaml): next 4 hours
   - platform: homeassistant
     entity_id: ${ha_hourly_4h}
     id: ha_hourly4
@@ -2402,7 +2402,7 @@ lvgl:
             border_color: 0x555555
 
         # ===== Rotating forecast box (15 s): 5-day / hourly / sun & moon =====
-        # Panel 1: compact 5-day (unchanged positions, now inside a transparent container)
+        # Panel 1: compact 5-day (inside a transparent container)
         - obj:
             id: fc_panel_5day
             x: 0
@@ -3252,7 +3252,7 @@ lvgl:
             y: 360
             styles: small_indoor_style
 
-        # Rain line (hidden unless event rain > 0), where the old sunrise/sunset line was
+        # Rain line (hidden unless event rain > 0)
         - label:
             id: rain_line
             x: 400
